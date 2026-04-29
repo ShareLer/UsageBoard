@@ -9,6 +9,11 @@ PLIST="$APP_BUNDLE/Contents/Info.plist"
 REMOTE_HOST="root@may"
 REMOTE_PATH="/data/web/blog/usageboard"
 DOWNLOAD_BASE_URL="https://may.ltd/usageboard"
+UPDATE_CHECK_URL="${DOWNLOAD_BASE_URL}/version.json"
+
+# --- Inject update check URL ---
+STORE_FILE="$PROJECT_DIR/Sources/UsageBoardApp/UsageBoardStore.swift"
+sed -i '' "s|__UPDATE_CHECK_URL__|${UPDATE_CHECK_URL}|g" "$STORE_FILE"
 
 # --- Version handling ---
 CURRENT_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$PLIST")
@@ -74,3 +79,6 @@ ssh "$REMOTE_HOST" "cd ${REMOTE_PATH} && ls -1t UsageBoard-*.zip 2>/dev/null | t
 
 echo ""
 echo "发布完成: v${NEW_VERSION}"
+
+# --- Restore placeholder ---
+sed -i '' "s|${UPDATE_CHECK_URL}|__UPDATE_CHECK_URL__|g" "$STORE_FILE"

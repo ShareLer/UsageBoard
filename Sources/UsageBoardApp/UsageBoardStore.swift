@@ -217,7 +217,7 @@ final class UsageBoardStore: ObservableObject {
         }
     }
 
-    private static let updateCheckURL = URL(string: "https://may.ltd/usageboard/version.json")!
+    private static let updateCheckURL = URL(string: "__UPDATE_CHECK_URL__")!
 
     func checkForUpdates() {
         Task {
