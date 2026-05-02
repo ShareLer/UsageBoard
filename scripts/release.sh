@@ -24,6 +24,7 @@ fi
 echo "版本: $CURRENT_VERSION → $NEW_VERSION"
 
 # --- Release notes ---
+git fetch --tags -q 2>/dev/null || true
 LAST_TAG=$(git tag --sort=-version:refname | head -1)
 if [ $# -ge 2 ]; then
     RAW_NOTES="$2"
