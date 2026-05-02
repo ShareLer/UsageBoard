@@ -201,7 +201,8 @@ final class UsageBoardStore: ObservableObject {
             displayName: displayNames[plugin.id] ?? plugin.name,
             state: .loading,
             items: snapshots[plugin.id]?.items ?? [],
-            updatedAt: snapshots[plugin.id]?.updatedAt
+            updatedAt: snapshots[plugin.id]?.updatedAt,
+            badge: snapshots[plugin.id]?.badge
         )
 
         let executor = executor
