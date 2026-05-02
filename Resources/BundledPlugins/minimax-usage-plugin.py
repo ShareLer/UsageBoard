@@ -157,11 +157,15 @@ def item(item_id: str, name: str, used: float, total: float, reset_at: str | Non
     }
 
 
-def build_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
+PLAN_BADGES = {600: "Starter", 1500: "Plus", 4500: "Max"}
+
+
+def build_items(payload: dict[str, Any]) -> tuple[list[dict[str, Any]], str | None]:
     models = payload.get("model_remains", [])
     if not isinstance(models, list):
-        return []
+        return [], None
 
+    badge: str | None = None
     output: list[dict[str, Any]] = []
     for model in models:
         if not isinstance(model, dict):
@@ -177,6 +181,9 @@ def build_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
         weekly_total = numeric(model.get("current_weekly_total_count"))
         weekly_remaining = numeric(model.get("current_weekly_usage_count"))
         weekly_used = weekly_total - weekly_remaining if weekly_total > 0 else 0
+
+        if raw_name == "MiniMax-M*" and badge is None:
+            badge = PLAN_BADGES.get(int(interval_total))
 
         if interval_total > 0:
             period = interval_label(model)
@@ -201,11 +208,14 @@ def build_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 )
             )
 
-    return output
+    return output, badge
 
 
-def success(items: list[dict[str, Any]]) -> int:
-    print(json.dumps({"schemaVersion": SCHEMA_VERSION, "updatedAt": utc_now_iso(), "items": items}, ensure_ascii=False))
+def success(items: list[dict[str, Any]], badge: str | None = None) -> int:
+    result: dict[str, Any] = {"schemaVersion": SCHEMA_VERSION, "updatedAt": utc_now_iso(), "items": items}
+    if badge:
+        result["badge"] = badge
+    print(json.dumps(result, ensure_ascii=False))
     return 0
 
 
@@ -239,10 +249,10 @@ def main() -> int:
         return failure("请在插件设置中配置 Api Key")
 
     try:
-        items = build_items(fetch_remains(api_key))
+        items, badge = build_items(fetch_remains(api_key))
         if not items:
             return failure("响应中没有可识别的配额项")
-        return success(items)
+        return success(items, badge=badge)
     except urllib.error.HTTPError as error:
         return failure(f"HTTP {error.code}")
     except urllib.error.URLError as error:

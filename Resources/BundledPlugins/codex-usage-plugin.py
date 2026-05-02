@@ -135,10 +135,14 @@ def parse_window(data: dict[str, Any], *keys: str) -> dict[str, Any] | None:
     return None
 
 
-def build_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
+def build_items(payload: dict[str, Any]) -> tuple[list[dict[str, Any]], str | None]:
     rate_limits = parse_window(payload, "rate_limit", "rate_limits")
     if not rate_limits:
-        return []
+        return [], None
+
+    badge = payload.get("plan_type")
+    if not isinstance(badge, str):
+        badge = None
 
     items: list[dict[str, Any]] = []
 
@@ -180,11 +184,14 @@ def build_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 "color": color_for(pct),
             })
 
-    return items
+    return items, badge
 
 
-def success(items: list[dict[str, Any]]) -> int:
-    print(json.dumps({"schemaVersion": SCHEMA_VERSION, "updatedAt": utc_now_iso(), "items": items}, ensure_ascii=False))
+def success(items: list[dict[str, Any]], badge: str | None = None) -> int:
+    result: dict[str, Any] = {"schemaVersion": SCHEMA_VERSION, "updatedAt": utc_now_iso(), "items": items}
+    if badge:
+        result["badge"] = badge
+    print(json.dumps(result, ensure_ascii=False))
     return 0
 
 
@@ -227,10 +234,10 @@ def main() -> int:
         return failure("认证文件中缺少 access_token 或 account_id")
 
     try:
-        items = build_items(fetch_usage(access_token, account_id))
+        items, badge = build_items(fetch_usage(access_token, account_id))
         if not items:
             return failure("响应中没有可识别的配额数据")
-        return success(items)
+        return success(items, badge=badge)
     except urllib.error.HTTPError as error:
         if error.code == 401:
             return failure("Token 已过期，请重新登录 Codex")

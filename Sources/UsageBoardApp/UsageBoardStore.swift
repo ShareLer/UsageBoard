@@ -213,7 +213,7 @@ final class UsageBoardStore: ObservableObject {
             }.value
             snapshots[plugin.id] = snapshot
             if snapshot.state == .ready, let updatedAt = snapshot.updatedAt {
-                let cached = PluginCachedState(updatedAt: updatedAt, items: snapshot.items)
+                let cached = PluginCachedState(updatedAt: updatedAt, items: snapshot.items, badge: snapshot.badge)
                 stateStore.save(stateID: plugin.stateID, state: cached)
             }
         }
@@ -318,7 +318,8 @@ final class UsageBoardStore: ObservableObject {
                 displayName: names[plugin.id] ?? plugin.name,
                 state: .ready,
                 items: cached.items,
-                updatedAt: cached.updatedAt
+                updatedAt: cached.updatedAt,
+                badge: cached.badge
             )
         }
     }

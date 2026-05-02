@@ -229,10 +229,15 @@ def color_for_percentage(pct: float) -> str:
     return "blue"
 
 
-def build_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    limits = payload.get("data", {}).get("limits", [])
+def build_items(payload: dict[str, Any]) -> tuple[list[dict[str, Any]], str | None]:
+    data = payload.get("data", {})
+    limits = data.get("limits", [])
     if not isinstance(limits, list):
-        return []
+        return [], None
+
+    badge = data.get("level")
+    if not isinstance(badge, str):
+        badge = None
 
     output: list[dict[str, Any]] = []
 
@@ -275,20 +280,18 @@ def build_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
     for entry in output:
         if entry["id"] in display_names:
             entry["name"] = display_names[entry["id"]]
-    return sorted(output, key=lambda value: order.get(value["id"], 99))
+    return sorted(output, key=lambda value: order.get(value["id"], 99)), badge
 
 
-def success(items: list[dict[str, Any]]) -> int:
-    print(
-        json.dumps(
-            {
-                "schemaVersion": SCHEMA_VERSION,
-                "updatedAt": utc_now_iso(),
-                "items": items,
-            },
-            ensure_ascii=False,
-        )
-    )
+def success(items: list[dict[str, Any]], badge: str | None = None) -> int:
+    result: dict[str, Any] = {
+        "schemaVersion": SCHEMA_VERSION,
+        "updatedAt": utc_now_iso(),
+        "items": items,
+    }
+    if badge:
+        result["badge"] = badge
+    print(json.dumps(result, ensure_ascii=False))
     return 0
 
 
@@ -324,10 +327,10 @@ def main() -> int:
 
     try:
         payload = fetch_limits(api_key, provider)
-        items = build_items(payload)
+        items, badge = build_items(payload)
         if not items:
             return failure("响应中没有可识别的配额项")
-        return success(items)
+        return success(items, badge=badge)
     except urllib.error.HTTPError as error:
         return failure(f"HTTP {error.code}")
     except urllib.error.URLError as error:

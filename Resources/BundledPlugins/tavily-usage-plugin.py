@@ -24,6 +24,7 @@ import sys
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
+from calendar import monthrange
 from typing import Any
 
 
@@ -59,6 +60,13 @@ def fetch_usage(api_key: str) -> dict[str, Any]:
     request = urllib.request.Request(ENDPOINT, headers={"Authorization": f"Bearer {api_key}"})
     with urllib.request.urlopen(request, timeout=5) as response:
         return json.loads(response.read().decode("utf-8"))
+
+
+def next_month_start_iso() -> str:
+    now = datetime.now(timezone.utc)
+    year = now.year + (1 if now.month == 12 else 0)
+    month = (now.month % 12) + 1
+    return datetime(year, month, 1, tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 def numeric(value: Any) -> float:
@@ -99,7 +107,7 @@ def item(item_id: str, name: str, used: float, total: float, color: str = "blue"
         "used": max(used, 0),
         "limit": max(total, 0),
         "displayStyle": "ratio",
-        "resetAt": None,
+        "resetAt": next_month_start_iso(),
         "status": status_for(used, total),
         "color": color,
     }

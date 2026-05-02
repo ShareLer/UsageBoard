@@ -215,10 +215,12 @@ public struct PluginConfiguration: Codable, Equatable, Identifiable, Sendable {
 public struct PluginOutput: Decodable, Equatable, Sendable {
     public var updatedAt: Date
     public var items: [UsageItem]
+    public var badge: String?
 
-    public init(updatedAt: Date, items: [UsageItem]) {
+    public init(updatedAt: Date, items: [UsageItem], badge: String? = nil) {
         self.updatedAt = updatedAt
         self.items = items
+        self.badge = badge
     }
 }
 
@@ -302,6 +304,7 @@ public struct PluginSnapshot: Equatable, Identifiable, Sendable {
     public var state: PluginSnapshotState
     public var items: [UsageItem]
     public var updatedAt: Date?
+    public var badge: String?
 
     public init(
         id: UUID,
@@ -309,7 +312,8 @@ public struct PluginSnapshot: Equatable, Identifiable, Sendable {
         displayName: String,
         state: PluginSnapshotState = .idle,
         items: [UsageItem] = [],
-        updatedAt: Date? = nil
+        updatedAt: Date? = nil,
+        badge: String? = nil
     ) {
         self.id = id
         self.pluginName = pluginName
@@ -317,15 +321,18 @@ public struct PluginSnapshot: Equatable, Identifiable, Sendable {
         self.state = state
         self.items = items
         self.updatedAt = updatedAt
+        self.badge = badge
     }
 }
 
 public struct PluginCachedState: Codable, Equatable, Sendable {
     public var updatedAt: Date
     public var items: [UsageItem]
+    public var badge: String?
 
-    public init(updatedAt: Date, items: [UsageItem]) {
+    public init(updatedAt: Date, items: [UsageItem], badge: String? = nil) {
         self.updatedAt = updatedAt
         self.items = items
+        self.badge = badge
     }
 }

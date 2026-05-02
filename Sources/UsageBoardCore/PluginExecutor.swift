@@ -58,7 +58,8 @@ public struct PluginExecutor: Sendable {
                 displayName: displayName,
                 state: .ready,
                 items: pluginOutput.items,
-                updatedAt: pluginOutput.updatedAt
+                updatedAt: pluginOutput.updatedAt,
+                badge: pluginOutput.badge
             )
         } catch {
             return failed(configuration: configuration, displayName: displayName, message: "JSON 解析失败：\(error.localizedDescription)")

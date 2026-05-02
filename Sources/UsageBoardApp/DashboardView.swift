@@ -180,9 +180,18 @@ struct PluginGroupView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
+            HStack(spacing: 6) {
                 Text(snapshot.displayName)
                     .font(.headline)
+                if let badge = snapshot.badge {
+                    Text(badge.uppercased())
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(.blue)
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                }
                 Spacer()
                 stateView
             }
