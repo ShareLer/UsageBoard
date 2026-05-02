@@ -117,12 +117,12 @@ def get_reset_at(window: dict[str, Any]) -> str | None:
     return None
 
 
-def color_for(percent: float) -> str:
-    if percent <= 10:
+def color_for(used_pct: float) -> str:
+    if used_pct >= 90:
         return "red"
-    if percent <= 25:
+    if used_pct >= 80:
         return "orange"
-    if percent <= 50:
+    if used_pct >= 60:
         return "yellow"
     return "blue"
 
@@ -160,13 +160,13 @@ def build_items(payload: dict[str, Any]) -> tuple[list[dict[str, Any]], str | No
             used = 100 - pct
             items.append({
                 "id": "codex-five-hour",
-                "name": "5 小时额度",
+                "name": "5 小时用量",
                 "used": round(used, 1),
                 "limit": 100,
                 "displayStyle": "percent",
                 "resetAt": get_reset_at(five_hour),
-                "status": "critical" if pct <= 10 else "warning" if pct <= 25 else "normal",
-                "color": color_for(pct),
+                "status": "critical" if used >= 90 else "warning" if used >= 75 else "normal",
+                "color": color_for(used),
             })
 
     if weekly:
@@ -175,13 +175,13 @@ def build_items(payload: dict[str, Any]) -> tuple[list[dict[str, Any]], str | No
             used = 100 - pct
             items.append({
                 "id": "codex-weekly",
-                "name": "周额度",
+                "name": "周用量",
                 "used": round(used, 1),
                 "limit": 100,
                 "displayStyle": "percent",
                 "resetAt": get_reset_at(weekly),
-                "status": "critical" if pct <= 10 else "warning" if pct <= 25 else "normal",
-                "color": color_for(pct),
+                "status": "critical" if used >= 90 else "warning" if used >= 75 else "normal",
+                "color": color_for(used),
             })
 
     return items, badge

@@ -268,9 +268,9 @@ def build_items(payload: dict[str, Any]) -> tuple[list[dict[str, Any]], str | No
         )
 
     display_names = {
-        "glm-text-5h": "5 小时额度",
-        "glm-text-week": "周额度",
-        "glm-tool-month": "MCP 月额度",
+        "glm-text-5h": "5 小时用量",
+        "glm-text-week": "周用量",
+        "glm-tool-month": "MCP 月用量",
     }
     order = {
         "glm-text-5h": 0,
