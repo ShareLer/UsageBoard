@@ -82,6 +82,91 @@ final class UsageBoardTests: XCTestCase {
         XCTAssertNotEqual(text, "--")
     }
 
+    func testPluginOutputDecodesChartAndCachesIt() throws {
+        let json = """
+        {
+          "schemaVersion": 1,
+          "updatedAt": "2026-05-01T00:00:00Z",
+          "items": [
+            {
+              "id": "requests",
+              "name": "Requests",
+              "used": 1,
+              "limit": 2,
+              "displayStyle": "ratio",
+              "status": "normal"
+            }
+          ],
+          "chart": {
+            "kind": "line",
+            "period": "7d",
+            "bucketUnit": "day",
+            "buckets": [
+              {
+                "id": "2026-05-01",
+                "label": "05-01",
+                "segments": [
+                  {"model": "glm-4.5", "tokens": 1200}
+                ]
+              }
+            ]
+          }
+        }
+        """.data(using: .utf8)!
+
+        let output = try UsageBoardJSON.decoder().decode(PluginOutput.self, from: json)
+        let chart = try XCTUnwrap(output.chart)
+        XCTAssertEqual(chart.period, "7d")
+        XCTAssertEqual(chart.buckets.first?.total, 1200)
+
+        let cached = PluginCachedState(updatedAt: output.updatedAt, items: output.items, chart: chart)
+        let encoded = try UsageBoardJSON.encoder().encode(cached)
+        let decoded = try UsageBoardJSON.decoder().decode(PluginCachedState.self, from: encoded)
+        XCTAssertEqual(decoded.chart, chart)
+    }
+
+    func testPluginExecutorPropagatesChart() throws {
+        let script = """
+        import json
+        print(json.dumps({
+            "schemaVersion": 1,
+            "updatedAt": "2026-05-01T00:00:00Z",
+            "items": [
+                {
+                    "id": "requests",
+                    "name": "Requests",
+                    "used": 1,
+                    "limit": 2,
+                    "displayStyle": "ratio",
+                    "status": "normal"
+                }
+            ],
+            "chart": {
+                "kind": "line",
+            "period": "7d",
+            "bucketUnit": "day",
+            "buckets": [
+                {
+                    "id": "2026-05-01",
+                    "label": "05-01",
+                        "segments": [
+                            {"model": "glm-4.5", "tokens": 1200}
+                        ]
+                    }
+                ]
+            }
+        }))
+        """
+        let scriptURL = FileManager.default.temporaryDirectory.appendingPathComponent("usageboard-\(UUID().uuidString).py")
+        try script.write(to: scriptURL, atomically: true, encoding: .utf8)
+
+        let configuration = PluginConfiguration(name: "Chart", executablePath: scriptURL.path)
+        let snapshot = PluginExecutor(timeoutSeconds: 2).run(configuration: configuration, displayName: "Chart")
+
+        XCTAssertEqual(snapshot.chart?.period, "7d")
+        XCTAssertEqual(snapshot.chart?.buckets.first?.segments.first?.model, "glm-4.5")
+    }
+
     func testProgressHandlesBoundsAndRatio() {
         let overLimit = UsageItem(id: "a", name: "A", used: 2, limit: 1, displayStyle: .percent)
         let noLimit = UsageItem(id: "b", name: "B", used: 2, limit: 0, displayStyle: .percent)
@@ -138,6 +223,23 @@ final class UsageBoardTests: XCTestCase {
         XCTAssertEqual(metadata.parameters.first?.required, true)
         XCTAssertEqual(metadata.parameters.last?.type, .choice)
         XCTAssertEqual(metadata.parameters.last?.options.map(\.value), ["GLM", "ZAI"])
+    }
+
+    func testGLMPluginMetadataUsesStatPeriodWithoutProvider() throws {
+        let testFileURL = URL(fileURLWithPath: #filePath)
+        let root = testFileURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let pluginURL = root.appendingPathComponent("Resources/BundledPlugins/glm-usage-plugin.py")
+
+        let metadata = try XCTUnwrap(PluginMetadataParser.parse(fileURL: pluginURL))
+        XCTAssertEqual(metadata.description, "查询智谱 / ZAI Coding Plan 用量和 token 统计")
+        XCTAssertNil(metadata.parameters.first(where: { $0.name == "PROVIDER" }))
+
+        let period = try XCTUnwrap(metadata.parameters.first(where: { $0.name == "STAT_PERIOD" }))
+        XCTAssertEqual(period.defaultValue, "7d")
+        XCTAssertEqual(period.options.map(\.value), ["7d", "30d"])
     }
 
     func testDuplicatePluginNamesGetNumbered() {

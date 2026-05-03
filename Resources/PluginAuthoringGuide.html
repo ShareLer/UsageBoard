@@ -138,14 +138,14 @@
 #       "placeholder": "Service API Key"
 #     },
 #     {
-#       "name": "PROVIDER",
-#       "label": "Provider",
+#       "name": "STAT_PERIOD",
+#       "label": "统计周期",
 #       "type": "choice",
 #       "required": false,
-#       "defaultValue": "GLM",
+#       "defaultValue": "7d",
 #       "options": [
-#         {"label": "GLM", "value": "GLM"},
-#         {"label": "ZAI", "value": "ZAI"}
+#         {"label": "7 天", "value": "7d"},
+#         {"label": "30 天", "value": "30d"}
 #       ]
 #     }
 #   ]
@@ -229,7 +229,24 @@ api_key = params.get("API_KEY", "")</code></pre>
       "status": "normal",
       "color": "blue"
     }
-  ]
+  ],
+  "badge": "PRO",
+  "chart": {
+    "kind": "line",
+    "period": "30d",
+    "bucketUnit": "day",
+    "buckets": [
+      {
+        "id": "2026-05-01",
+        "label": "05-01",
+        "segments": [
+          {"model": "glm-4.5", "tokens": 1200},
+          {"model": "glm-4.6", "tokens": 800}
+        ]
+      }
+    ],
+    "message": null
+  }
 }</code></pre>
 
   <h3>用量项目字段</h3>
@@ -272,6 +289,35 @@ api_key = params.get("API_KEY", "")</code></pre>
       <tr>
         <td><code>color</code></td>
         <td>可选。控制进度条颜色，支持 <code>blue</code>、<code>yellow</code>、<code>orange</code>、<code>red</code>、<code>green</code>；不传默认蓝色。</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>可选图表字段</h3>
+  <p>顶层 <code>chart</code> 字段用于在插件卡片底部展示 token 统计图。当前支持 <code>kind: "line"</code>，每个 <code>bucket</code> 是一个时间点，每个 <code>segment</code> 是一个模型序列值。</p>
+  <table>
+    <thead>
+      <tr>
+        <th>字段</th>
+        <th>说明</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>period</code></td>
+        <td>统计周期标识，例如 <code>7d</code>、<code>30d</code>。</td>
+      </tr>
+      <tr>
+        <td><code>bucketUnit</code></td>
+        <td>时间桶单位，支持 <code>hour</code> 或 <code>day</code>。</td>
+      </tr>
+      <tr>
+        <td><code>buckets[].segments[]</code></td>
+        <td>模型分段，包含 <code>model</code> 和 <code>tokens</code>。</td>
+      </tr>
+      <tr>
+        <td><code>message</code></td>
+        <td>可选提示文案，统计数据为空或不可用时显示。</td>
       </tr>
     </tbody>
   </table>

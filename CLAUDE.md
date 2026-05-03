@@ -175,14 +175,14 @@ PluginConfiguration
 
 ```json
 {
-  "name": "PROVIDER",
-  "label": "Provider",
+  "name": "STAT_PERIOD",
+  "label": "统计周期",
   "type": "choice",
   "required": true,
-  "defaultValue": "GLM",
+  "defaultValue": "7d",
   "options": [
-    { "label": "国内站", "value": "GLM" },
-    { "label": "国际站", "value": "ZAI" }
+    { "label": "7 天", "value": "7d" },
+    { "label": "30 天", "value": "30d" }
   ]
 }
 ```
@@ -204,7 +204,22 @@ PluginConfiguration
       "color": "blue"
     }
   ],
-  "badge": "PRO"
+  "badge": "PRO",
+  "chart": {
+    "kind": "line",
+    "period": "30d",
+    "bucketUnit": "day",
+    "buckets": [
+      {
+        "id": "2026-05-01",
+        "label": "05-01",
+        "segments": [
+          {"model": "glm-4.5", "tokens": 1200}
+        ]
+      }
+    ],
+    "message": null
+  }
 }
 ```
 
@@ -219,13 +234,14 @@ PluginConfiguration
 - `items[].status`：`normal`、`warning`、`critical`、`unknown`。
 - `items[].color`：可选，支持 `blue`、`yellow`、`orange`、`red`、`green`，缺省蓝色。阈值基于**已用量百分比**：≥90% red，≥80% orange，≥60% yellow，<60% blue。
 - `badge`：可选字符串，显示在插件卡片标题旁的黑色圆角徽章中（白色大写加粗文字）。用于显示订阅级别等信息。
+- `chart`：可选 token 统计图，当前支持 `kind: "line"`；`bucketUnit` 为 `hour` 或 `day`，`segments` 中每项包含 `model` 和 `tokens`。
 - `icon`：插件元数据中的可选字段，为图标图片 URL。显示在插件卡片标题前，无设置时显示默认拼图图标。图片通过 `NSCache` 内存缓存，首次加载后不再重复下载。
 
 ## 内置插件
 
 当前内置插件位于 `Resources/BundledPlugins/`：
 
-- `glm-usage-plugin.py`：智谱 Coding Plan 用量，Provider 支持 GLM/ZAI。
+- `glm-usage-plugin.py`：智谱 / ZAI Coding Plan 用量和 token 统计。
 - `deepseek-usage-plugin.py`：DeepSeek API 余额查询。
 - `minimax-usage-plugin.py`：MiniMax Coding Plan 用量，API 为 `token_plan/remains`。
 - `tavily-usage-plugin.py`：Tavily Search 月度用量。
