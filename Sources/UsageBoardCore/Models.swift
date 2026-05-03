@@ -99,21 +99,25 @@ public struct PluginParameterMetadata: Codable, Equatable, Identifiable, Sendabl
 public struct PluginMetadata: Codable, Equatable, Sendable {
     public var name: String?
     public var description: String?
+    public var icon: String?
     public var parameters: [PluginParameterMetadata]
 
     public init(
         name: String? = nil,
         description: String? = nil,
+        icon: String? = nil,
         parameters: [PluginParameterMetadata] = []
     ) {
         self.name = name
         self.description = description
+        self.icon = icon
         self.parameters = parameters
     }
 
     private enum CodingKeys: String, CodingKey {
         case name
         case description
+        case icon
         case parameters
     }
 
@@ -121,6 +125,7 @@ public struct PluginMetadata: Codable, Equatable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         name = try container.decodeIfPresent(String.self, forKey: .name)
         description = try container.decodeIfPresent(String.self, forKey: .description)
+        icon = try container.decodeIfPresent(String.self, forKey: .icon)
         parameters = try container.decodeIfPresent([PluginParameterMetadata].self, forKey: .parameters) ?? []
     }
 }
@@ -305,6 +310,7 @@ public struct PluginSnapshot: Equatable, Identifiable, Sendable {
     public var items: [UsageItem]
     public var updatedAt: Date?
     public var badge: String?
+    public var iconURL: String?
 
     public init(
         id: UUID,
@@ -313,7 +319,8 @@ public struct PluginSnapshot: Equatable, Identifiable, Sendable {
         state: PluginSnapshotState = .idle,
         items: [UsageItem] = [],
         updatedAt: Date? = nil,
-        badge: String? = nil
+        badge: String? = nil,
+        iconURL: String? = nil
     ) {
         self.id = id
         self.pluginName = pluginName
@@ -322,6 +329,7 @@ public struct PluginSnapshot: Equatable, Identifiable, Sendable {
         self.items = items
         self.updatedAt = updatedAt
         self.badge = badge
+        self.iconURL = iconURL
     }
 }
 

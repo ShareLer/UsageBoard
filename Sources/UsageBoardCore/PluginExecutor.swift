@@ -9,7 +9,7 @@ public struct PluginExecutor: Sendable {
 
     public func run(configuration: PluginConfiguration, displayName: String) -> PluginSnapshot {
         guard configuration.enabled else {
-            return PluginSnapshot(id: configuration.id, pluginName: configuration.name, displayName: displayName)
+            return PluginSnapshot(id: configuration.id, pluginName: configuration.name, displayName: displayName, iconURL: configuration.metadata?.icon)
         }
 
         guard !configuration.executablePath.isEmpty else {
@@ -59,7 +59,8 @@ public struct PluginExecutor: Sendable {
                 state: .ready,
                 items: pluginOutput.items,
                 updatedAt: pluginOutput.updatedAt,
-                badge: pluginOutput.badge
+                badge: pluginOutput.badge,
+                iconURL: configuration.metadata?.icon
             )
         } catch {
             return failed(configuration: configuration, displayName: displayName, message: "JSON 解析失败：\(error.localizedDescription)")
@@ -89,7 +90,8 @@ public struct PluginExecutor: Sendable {
             displayName: displayName,
             state: .failed(message),
             items: [],
-            updatedAt: Date()
+            updatedAt: Date(),
+            iconURL: configuration.metadata?.icon
         )
     }
 }

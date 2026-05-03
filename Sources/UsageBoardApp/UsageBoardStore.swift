@@ -44,6 +44,8 @@ final class UsageBoardStore: ObservableObject {
         } catch {
             lastError = "内置插件安装失败：\(error.localizedDescription)"
         }
+        reloadAllMetadata()
+        try? configStore.save(configuration)
         rebuildSnapshots()
         loadCachedStates()
         startSchedulers()
@@ -65,11 +67,7 @@ final class UsageBoardStore: ObservableObject {
         if let snapshot = snapshots[plugin.id] {
             return snapshot
         }
-        return PluginSnapshot(
-            id: plugin.id,
-            pluginName: plugin.name,
-            displayName: displayNames[plugin.id] ?? plugin.name
-        )
+        return makeSnapshot(for: plugin)
     }
 
     func saveConfiguration() {
@@ -103,13 +101,7 @@ final class UsageBoardStore: ObservableObject {
             parameterValues: values
         )
         configuration.plugins.append(plugin)
-        let displayName = displayNames[plugin.id] ?? plugin.name
-        snapshots[plugin.id] = PluginSnapshot(
-            id: plugin.id,
-            pluginName: plugin.name,
-            displayName: displayName,
-            state: .idle
-        )
+        snapshots[plugin.id] = makeSnapshot(for: plugin)
         saveConfiguration()
     }
 
@@ -142,10 +134,8 @@ final class UsageBoardStore: ObservableObject {
         lastError = nil
         saveConfiguration()
 
-        snapshots[id] = PluginSnapshot(
-            id: plugin.id,
-            pluginName: plugin.name,
-            displayName: displayNames[plugin.id] ?? plugin.name,
+        snapshots[id] = makeSnapshot(
+            for: plugin,
             state: .loading,
             items: snapshots[plugin.id]?.items ?? [],
             updatedAt: snapshots[plugin.id]?.updatedAt
@@ -161,6 +151,17 @@ final class UsageBoardStore: ObservableObject {
 
         for parameter in metadata?.parameters ?? [] where configuration.plugins[index].parameterValues[parameter.name] == nil {
             configuration.plugins[index].parameterValues[parameter.name] = parameter.defaultValue ?? ""
+        }
+    }
+
+    private func reloadAllMetadata() {
+        for index in configuration.plugins.indices {
+            let fileURL = URL(fileURLWithPath: configuration.plugins[index].executablePath)
+            let metadata = PluginMetadataParser.parse(fileURL: fileURL)
+            configuration.plugins[index].metadata = metadata
+            for parameter in metadata?.parameters ?? [] where configuration.plugins[index].parameterValues[parameter.name] == nil {
+                configuration.plugins[index].parameterValues[parameter.name] = parameter.defaultValue ?? ""
+            }
         }
     }
 
@@ -183,10 +184,8 @@ final class UsageBoardStore: ObservableObject {
         guard let plugin = configuration.plugins.first(where: { $0.id == pluginID }) else { return }
         guard plugin.enabled else { return }
         guard isPluginReadyToRun(plugin) else {
-            snapshots[plugin.id] = PluginSnapshot(
-                id: plugin.id,
-                pluginName: plugin.name,
-                displayName: displayNames[plugin.id] ?? plugin.name,
+            snapshots[plugin.id] = makeSnapshot(
+                for: plugin,
                 state: .loading,
                 items: snapshots[plugin.id]?.items ?? [],
                 updatedAt: snapshots[plugin.id]?.updatedAt
@@ -195,10 +194,8 @@ final class UsageBoardStore: ObservableObject {
         }
         guard force || stateStore.needsRefresh(stateID: plugin.stateID, intervalSeconds: plugin.refreshIntervalSeconds) else { return }
 
-        snapshots[plugin.id] = PluginSnapshot(
-            id: plugin.id,
-            pluginName: plugin.name,
-            displayName: displayNames[plugin.id] ?? plugin.name,
+        snapshots[plugin.id] = makeSnapshot(
+            for: plugin,
             state: .loading,
             items: snapshots[plugin.id]?.items ?? [],
             updatedAt: snapshots[plugin.id]?.updatedAt,
@@ -297,26 +294,18 @@ final class UsageBoardStore: ObservableObject {
     }
 
     private func rebuildSnapshots() {
-        let names = displayNames
         var next: [UUID: PluginSnapshot] = [:]
         for plugin in configuration.plugins {
-            next[plugin.id] = snapshots[plugin.id] ?? PluginSnapshot(
-                id: plugin.id,
-                pluginName: plugin.name,
-                displayName: names[plugin.id] ?? plugin.name
-            )
+            next[plugin.id] = snapshots[plugin.id] ?? makeSnapshot(for: plugin)
         }
         snapshots = next
     }
 
     private func loadCachedStates() {
-        let names = displayNames
         for plugin in configuration.plugins {
             guard let cached = stateStore.load(stateID: plugin.stateID) else { continue }
-            snapshots[plugin.id] = PluginSnapshot(
-                id: plugin.id,
-                pluginName: plugin.name,
-                displayName: names[plugin.id] ?? plugin.name,
+            snapshots[plugin.id] = makeSnapshot(
+                for: plugin,
                 state: .ready,
                 items: cached.items,
                 updatedAt: cached.updatedAt,
@@ -335,13 +324,7 @@ final class UsageBoardStore: ObservableObject {
             let hasCached = stateStore.load(stateID: plugin.stateID) != nil
 
             if !hasCached {
-                let names = displayNames
-                snapshots[id] = PluginSnapshot(
-                    id: id,
-                    pluginName: plugin.name,
-                    displayName: names[id] ?? plugin.name,
-                    state: .loading
-                )
+                snapshots[id] = makeSnapshot(for: plugin, state: .loading)
             }
 
             refreshTasks[id] = Task { [weak self] in
@@ -389,6 +372,25 @@ final class UsageBoardStore: ObservableObject {
             }
         }
         return missing
+    }
+
+    private func makeSnapshot(
+        for plugin: PluginConfiguration,
+        state: PluginSnapshotState = .idle,
+        items: [UsageItem] = [],
+        updatedAt: Date? = nil,
+        badge: String? = nil
+    ) -> PluginSnapshot {
+        PluginSnapshot(
+            id: plugin.id,
+            pluginName: plugin.name,
+            displayName: displayNames[plugin.id] ?? plugin.name,
+            state: state,
+            items: items,
+            updatedAt: updatedAt,
+            badge: badge,
+            iconURL: plugin.metadata?.icon
+        )
     }
 
     private func isPluginReadyToRun(_ plugin: PluginConfiguration) -> Bool {
