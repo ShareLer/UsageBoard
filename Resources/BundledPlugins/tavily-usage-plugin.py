@@ -3,6 +3,7 @@
 # {
 #   "schemaVersion": 1,
 #   "name": "Tavily",
+#   "icon": "https://raw.githubusercontent.com/lobehub/lobe-icons/refs/heads/master/packages/static-png/light/tavily-color.png",
 #   "description": "查询 Tavily Search 月度用量",
 #   "parameters": [
 #     {
@@ -100,14 +101,14 @@ def color_for(used: float, total: float) -> str:
     return "blue"
 
 
-def item(item_id: str, name: str, used: float, total: float, color: str = "blue") -> dict[str, Any]:
+def item(item_id: str, name: str, used: float, total: float, color: str = "blue", reset_at: str | None = None) -> dict[str, Any]:
     return {
         "id": item_id,
         "name": name,
         "used": max(used, 0),
         "limit": max(total, 0),
         "displayStyle": "ratio",
-        "resetAt": next_month_start_iso(),
+        "resetAt": reset_at,
         "status": status_for(used, total),
         "color": color,
     }
@@ -123,7 +124,16 @@ def build_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
         return []
 
     plan_usage = numeric(account.get("plan_usage"))
-    output = [item("tavily-total-month", "总用量", plan_usage, plan_limit, color_for(plan_usage, plan_limit))]
+    output = [
+        item(
+            "tavily-total-month",
+            "总用量",
+            plan_usage,
+            plan_limit,
+            color_for(plan_usage, plan_limit),
+            next_month_start_iso(),
+        )
+    ]
 
     details = [
         ("tavily-search", "搜索", "search_usage"),

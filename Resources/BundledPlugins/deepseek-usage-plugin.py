@@ -3,6 +3,7 @@
 # {
 #   "schemaVersion": 1,
 #   "name": "DeepSeek",
+#   "icon": "https://raw.githubusercontent.com/lobehub/lobe-icons/refs/heads/master/packages/static-png/light/deepseek-color.png",
 #   "description": "查询 DeepSeek API 余额",
 #   "parameters": [
 #     {

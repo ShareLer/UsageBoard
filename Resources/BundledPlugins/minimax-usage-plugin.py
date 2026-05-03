@@ -3,6 +3,7 @@
 # {
 #   "schemaVersion": 1,
 #   "name": "MiniMax",
+#   "icon": "https://raw.githubusercontent.com/lobehub/lobe-icons/refs/heads/master/packages/static-png/light/minimax-color.png",
 #   "description": "查询 MiniMax Coding Plan 用量",
 #   "parameters": [
 #     {

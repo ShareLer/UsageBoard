@@ -3,6 +3,7 @@
 # {
 #   "schemaVersion": 1,
 #   "name": "FlowerCloud",
+#   "icon": "https://api-flowercloud.com/favicon.ico",
 #   "description": "查询 FlowerCloud 代理用量",
 #   "parameters": [
 #     {
