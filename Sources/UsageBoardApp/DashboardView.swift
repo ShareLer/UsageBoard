@@ -49,28 +49,40 @@ struct DashboardView: View {
                     }
                 case .tabs:
                     VStack(spacing: 0) {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 6) {
-                                ForEach(enabledPlugins) { plugin in
-                                    Button {
-                                        store.selectedTabID = plugin.id
-                                    } label: {
-                                        Text(store.snapshot(for: plugin).displayName)
-                                            .font(.callout.weight(store.selectedTabID == plugin.id ? .semibold : .regular))
-                                            .foregroundStyle(store.selectedTabID == plugin.id ? .primary : .secondary)
-                                            .padding(.horizontal, 10)
-                                            .padding(.vertical, 4)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 6)
-                                                    .fill(store.selectedTabID == plugin.id ? Color(nsColor: .selectedControlColor) : .clear)
-                                            )
+                        ScrollViewReader { proxy in
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 6) {
+                                    ForEach(enabledPlugins) { plugin in
+                                        Button {
+                                            store.selectedTabID = plugin.id
+                                        } label: {
+                                            Text(store.snapshot(for: plugin).displayName)
+                                                .font(.callout.weight(store.selectedTabID == plugin.id ? .semibold : .regular))
+                                                .foregroundStyle(store.selectedTabID == plugin.id ? .primary : .secondary)
+                                                .padding(.horizontal, 10)
+                                                .padding(.vertical, 4)
+                                                .background(
+                                                    RoundedRectangle(cornerRadius: 6)
+                                                        .fill(store.selectedTabID == plugin.id ? Color(nsColor: .selectedControlColor) : .clear)
+                                                )
+                                        }
+                                        .buttonStyle(.plain)
+                                        .id(plugin.id)
                                     }
-                                    .buttonStyle(.plain)
                                 }
+                                .padding(.horizontal, 10)
                             }
-                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .onAppear {
+                                scrollToSelectedTab(with: proxy)
+                            }
+                            .onChange(of: store.selectedTabID) { _ in
+                                scrollToSelectedTab(with: proxy)
+                            }
+                            .onChange(of: enabledPlugins.map(\.id)) { _ in
+                                scrollToSelectedTab(with: proxy)
+                            }
                         }
-                        .padding(.vertical, 6)
                         Divider()
                         if let plugin = selectedPlugin {
                             PluginGroupView(snapshot: store.snapshot(for: plugin)) {
@@ -116,6 +128,13 @@ struct DashboardView: View {
             return
         }
         store.selectedTabID = enabledPlugins.first?.id
+    }
+
+    private func scrollToSelectedTab(with proxy: ScrollViewProxy) {
+        guard let selectedTabID = store.selectedTabID else { return }
+        withAnimation(.easeInOut(duration: 0.15)) {
+            proxy.scrollTo(selectedTabID, anchor: .center)
+        }
     }
 }
 
