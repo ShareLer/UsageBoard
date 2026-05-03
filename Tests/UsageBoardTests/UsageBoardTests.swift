@@ -77,7 +77,9 @@ final class UsageBoardTests: XCTestCase {
         XCTAssertEqual(item.progress, 0.8)
         XCTAssertEqual(item.displayValue(), "80%")
         let now = ISO8601DateFormatter().date(from: "2026-04-29T00:00:00Z")!
-        XCTAssertFalse(item.resetText(now: now).contains("重置"))
+        let text = item.resetText(now: now)
+        XCTAssertFalse(text.isEmpty)
+        XCTAssertNotEqual(text, "--")
     }
 
     func testProgressHandlesBoundsAndRatio() {
@@ -89,8 +91,19 @@ final class UsageBoardTests: XCTestCase {
         XCTAssertEqual(overLimit.displayValue(), "100%")
         XCTAssertEqual(noLimit.progress, 0)
         XCTAssertEqual(noLimit.displayValue(), "0%")
-        XCTAssertEqual(ratio.displayValue(), "2/1500")
+        XCTAssertEqual(ratio.displayValue(), "2 / 1500")
         XCTAssertEqual(ratio.resetText(), "--")
+    }
+
+    func testResetTextShowsStaticDateTime() {
+        let now = ISO8601DateFormatter().date(from: "2026-04-29T00:00:00Z")!
+        let resetAt = ISO8601DateFormatter().date(from: "2026-04-30T01:02:03Z")!
+        let item = UsageItem(id: "a", name: "A", used: 1, limit: 2, displayStyle: .ratio, resetAt: resetAt)
+
+        let text = item.resetText(now: now)
+        XCTAssertFalse(text.isEmpty)
+        XCTAssertNotEqual(text, "--")
+        XCTAssertEqual(item.resetText(now: resetAt), "--")
     }
 
     func testPluginMetadataParserReadsCommentBlock() throws {
