@@ -8,3 +8,6 @@ DerivedData/
 /dist
 /.claude
 __pycache__/
+/Resources/CustomPlugins/
+/CLAUDE.md
+/AGENTS.md
