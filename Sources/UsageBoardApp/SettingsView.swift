@@ -4,26 +4,18 @@ import UsageBoardCore
 
 // MARK: - Tab Enum
 
-enum SettingsTab: String, CaseIterable, Identifiable {
-    case general = "通用"
-    case plugins = "插件"
-    case about = "关于"
+enum SettingsTab: CaseIterable, Identifiable {
+    case general
+    case plugins
+    case about
 
-    var id: String { rawValue }
+    var id: Self { self }
 
     var icon: String {
         switch self {
         case .general: return "gear"
         case .plugins: return "puzzlepiece.extension"
         case .about: return "info.circle"
-        }
-    }
-
-    var subtitle: String {
-        switch self {
-        case .general: return "启动、快捷键与显示"
-        case .plugins: return "管理 API 用量查询插件"
-        case .about: return "应用信息与更新"
         }
     }
 }
@@ -33,6 +25,11 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 struct SettingsView: View {
     @ObservedObject var store: UsageBoardStore
     @State private var selectedTab: SettingsTab = .general
+
+    private var strings: AppLocalization {
+        AppLocalization(language: store.activeLanguage)
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             // Sidebar
@@ -107,7 +104,7 @@ struct SettingsView: View {
                 Image(systemName: tab.icon)
                     .font(.system(size: 13))
                     .frame(width: 16)
-                Text(tab.rawValue)
+                Text(strings.tabTitle(tab))
                     .font(.system(size: 13))
                 Spacer()
             }
@@ -127,9 +124,9 @@ struct SettingsView: View {
 
     private var pageHeader: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(selectedTab.rawValue)
+            Text(strings.tabTitle(selectedTab))
                 .font(.system(size: 20, weight: .semibold))
-            Text(selectedTab.subtitle)
+            Text(strings.tabSubtitle(selectedTab))
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
         }
@@ -144,10 +141,13 @@ struct SettingsView: View {
 
 struct GeneralSettingsView: View {
     @ObservedObject var store: UsageBoardStore
+    private var strings: AppLocalization {
+        AppLocalization(language: store.activeLanguage)
+    }
 
     var body: some View {
         SettingsSection {
-            SettingsRow(label: "开机启动") {
+            SettingsRow(label: strings.text(.launchAtLogin)) {
                 Toggle("", isOn: $store.configuration.launchAtLogin)
                     .toggleStyle(.switch)
                     .labelsHidden()
@@ -158,10 +158,10 @@ struct GeneralSettingsView: View {
                     .frame(width: 120, alignment: .leading)
             }
 
-            SettingsRow(label: "显示模式") {
+            SettingsRow(label: strings.text(.displayMode)) {
                 Picker("", selection: $store.configuration.overviewDisplayMode) {
                     ForEach(DisplayMode.allCases) { mode in
-                        Text(displayModeName(mode)).tag(mode)
+                        Text(strings.displayModeName(mode)).tag(mode)
                     }
                 }
                 .labelsHidden()
@@ -170,13 +170,40 @@ struct GeneralSettingsView: View {
                     store.saveConfiguration()
                 }
             }
+
+            SettingsRow(label: strings.text(.language)) {
+                Picker("", selection: $store.configuration.language) {
+                    ForEach(AppLanguage.allCases) { language in
+                        Text(language.displayName).tag(language)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 120, alignment: .leading)
+                .onChange(of: store.configuration.language) { newValue in
+                    store.saveConfiguration()
+                    if newValue != store.activeLanguage {
+                        showRestartRequiredAlert()
+                    }
+                }
+            }
         }
     }
 
-    private func displayModeName(_ mode: DisplayMode) -> String {
-        switch mode {
-        case .grouped: return "分组"
-        case .tabs: return "标签页"
+    private func showRestartRequiredAlert() {
+        let alert = NSAlert()
+        alert.messageText = strings.text(.restartRequiredTitle)
+        alert.informativeText = strings.text(.restartRequiredMessage)
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: strings.text(.restartNow))
+        alert.addButton(withTitle: strings.text(.restartLater))
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            do {
+                try AppRelauncher.relaunchCurrent()
+                NSApp.terminate(nil)
+            } catch {
+                store.lastError = "\(strings.text(.relaunchFailed)): \(error.localizedDescription)"
+            }
         }
     }
 }
@@ -188,6 +215,9 @@ struct PluginSettingsView: View {
     @State private var selectedPluginID: UUID?
     @State private var draggingPluginID: UUID?
     @State private var draft: PluginConfiguration?
+    private var strings: AppLocalization {
+        AppLocalization(language: store.activeLanguage)
+    }
 
     private var hasChanges: Bool {
         guard let id = selectedPluginID,
@@ -263,7 +293,7 @@ struct PluginSettingsView: View {
                             .frame(width: 24, height: 24)
                     }
                     .buttonStyle(.borderless)
-                    .help("打开插件文件夹")
+                    .help(strings.text(.openPluginsFolder))
 
                     Button {
                         openPluginHelp()
@@ -273,7 +303,7 @@ struct PluginSettingsView: View {
                             .frame(width: 24, height: 24)
                     }
                     .buttonStyle(.borderless)
-                    .help("插件编写说明")
+                    .help(strings.text(.pluginAuthoringGuide))
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 6)
@@ -302,7 +332,9 @@ struct PluginSettingsView: View {
                             PluginSettingsCard(
                                 plugin: draftBinding,
                                 enabled: pluginEnabledBinding(draft),
-                                pluginsDirectoryURL: store.pluginsDirectoryURL
+                                pluginsDirectoryURL: store.pluginsDirectoryURL,
+                                language: store.activeLanguage,
+                                displayName: PluginDisplayNames.displayName(for: draft, language: store.activeLanguage)
                             ) {
                                 reloadDraftMetadata()
                             } onRemove: {
@@ -319,11 +351,11 @@ struct PluginSettingsView: View {
                     // Save / Reset buttons
                     HStack {
                         Spacer()
-                        Button("重置") {
+                        Button(strings.text(.reset)) {
                             loadDraft(for: draft.id)
                         }
                         .disabled(!hasChanges)
-                        Button("保存") {
+                        Button(strings.text(.save)) {
                             saveDraft()
                         }
                         .disabled(!hasChanges)
@@ -337,7 +369,7 @@ struct PluginSettingsView: View {
                     Image(systemName: "puzzlepiece.extension")
                         .font(.system(size: 28))
                         .foregroundStyle(.tertiary)
-                    Text("选择一个插件查看配置")
+                    Text(strings.text(.selectPlugin))
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)
                 }
@@ -394,7 +426,7 @@ struct PluginSettingsView: View {
                 .font(.system(size: 12))
                 .foregroundStyle(selectedPluginID == plugin.id ? Color.accentColor : .secondary)
                 .frame(width: 16)
-            Text(plugin.name.isEmpty ? "Untitled" : plugin.name)
+            Text(PluginDisplayNames.displayName(for: plugin, language: store.activeLanguage))
                 .font(.system(size: 13))
                 .lineLimit(1)
             Spacer()
@@ -446,7 +478,9 @@ struct PluginSettingsView: View {
             return
         }
 
-        store.lastError = "未找到插件编写说明文档"
+        store.lastError = store.activeLanguage == .en
+            ? "Plugin authoring guide was not found"
+            : "未找到插件编写说明文档"
     }
 }
 
@@ -455,18 +489,21 @@ struct PluginSettingsView: View {
 struct AboutView: View {
     @ObservedObject var store: UsageBoardStore
     @State private var isUserChecking = false
+    private var strings: AppLocalization {
+        AppLocalization(language: store.activeLanguage)
+    }
 
     private var currentVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "未知"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? strings.text(.unknownVersion)
     }
 
     var body: some View {
         SettingsSection {
-            SettingsRow(label: "版本") {
+            SettingsRow(label: strings.text(.version)) {
                 HStack(spacing: 8) {
                     Text(currentVersion)
                         .foregroundStyle(.secondary)
-                    Button(store.isUpdating ? "更新中..." : "检查更新") {
+                    Button(store.isUpdating ? strings.text(.checkingUpdate) : strings.text(.checkForUpdates)) {
                         isUserChecking = true
                         store.checkForUpdates()
                     }
@@ -484,8 +521,8 @@ struct AboutView: View {
                 }
             }
 
-            SettingsRow(label: "说明") {
-                Text("聚合展示各类 API 和服务的用量配额")
+            SettingsRow(label: strings.text(.aboutDescriptionLabel)) {
+                Text(strings.text(.aboutDescription))
                     .foregroundStyle(.secondary)
             }
         }
@@ -498,10 +535,17 @@ struct AboutView: View {
 
     private func showUpdateAlert(_ info: UpdateInfo) {
         let alert = NSAlert()
-        alert.messageText = "发现新版本 \(info.latestVersion)"
-        alert.informativeText = info.notes?.isEmpty == false ? info.notes! : "当前版本 \(currentVersion)，新版本 \(info.latestVersion)。\n是否立即下载并更新？"
-        alert.addButton(withTitle: "更新")
-        alert.addButton(withTitle: "取消")
+        if store.activeLanguage == .en {
+            alert.messageText = "New version \(info.latestVersion) available"
+            alert.informativeText = info.notes?.isEmpty == false ? info.notes! : "Current version \(currentVersion), new version \(info.latestVersion).\nDownload and update now?"
+            alert.addButton(withTitle: "Update")
+            alert.addButton(withTitle: "Cancel")
+        } else {
+            alert.messageText = "发现新版本 \(info.latestVersion)"
+            alert.informativeText = info.notes?.isEmpty == false ? info.notes! : "当前版本 \(currentVersion)，新版本 \(info.latestVersion)。\n是否立即下载并更新？"
+            alert.addButton(withTitle: "更新")
+            alert.addButton(withTitle: "取消")
+        }
         alert.alertStyle = .informational
 
         if alert.runModal() == .alertFirstButtonReturn {
@@ -555,38 +599,44 @@ struct PluginSettingsCard: View {
     @Binding var plugin: PluginConfiguration
     var enabled: Binding<Bool>
     var pluginsDirectoryURL: URL
+    var language: AppLanguage
+    var displayName: String
     var onReloadMetadata: () -> Void
     var onRemove: () -> Void
+
+    private var strings: AppLocalization {
+        AppLocalization(language: language)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             // Header
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(plugin.name.isEmpty ? "Untitled" : plugin.name)
+                    Text(displayName)
                         .font(.system(size: 16, weight: .semibold))
-                    if let desc = plugin.metadata?.description, !desc.isEmpty {
+                    if let desc = plugin.metadata?.localizedDescription(language: language), !desc.isEmpty {
                         Text(desc)
                             .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                     }
                 }
                 Spacer()
-                Toggle("启用", isOn: enabled)
+                Toggle(strings.text(.enabled), isOn: enabled)
             }
 
             Divider()
 
             // Fields
             VStack(alignment: .leading, spacing: 0) {
-                pluginRow("名称") {
-                    TextField("插件名称", text: $plugin.name)
+                pluginRow(strings.text(.name)) {
+                    TextField(strings.text(.pluginNamePlaceholder), text: $plugin.name)
                         .textFieldStyle(.roundedBorder)
                 }
 
-                pluginRow("脚本") {
+                pluginRow(strings.text(.script)) {
                     HStack(spacing: 4) {
-                        TextField("Python 脚本路径", text: $plugin.executablePath)
+                        TextField(strings.text(.scriptPathPlaceholder), text: $plugin.executablePath)
                             .textFieldStyle(.roundedBorder)
                         Button {
                             chooseExecutable()
@@ -605,12 +655,12 @@ struct PluginSettingsCard: View {
                     }
                 }
 
-                pluginRow("刷新间隔") {
+                pluginRow(strings.text(.refreshInterval)) {
                     HStack(spacing: 4) {
-                        TextField("秒", value: $plugin.refreshIntervalSeconds, format: .number)
+                        TextField(strings.text(.seconds), value: $plugin.refreshIntervalSeconds, format: .number)
                             .textFieldStyle(.roundedBorder)
                             .frame(width: 80)
-                        Text("秒")
+                        Text(strings.text(.seconds))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -621,18 +671,18 @@ struct PluginSettingsCard: View {
             // Plugin parameters
             if let metadata = plugin.metadata, !metadata.parameters.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("插件参数")
+                    Text(strings.text(.pluginParameters))
                         .font(.system(size: 13, weight: .semibold))
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(metadata.parameters) { parameter in
-                            PluginParameterField(plugin: $plugin, parameter: parameter)
+                            PluginParameterField(plugin: $plugin, parameter: parameter, language: language)
                         }
                     }
                     .background(Color(nsColor: .controlBackgroundColor))
                     .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
             } else {
-                Text("未读取到插件参数元数据")
+                Text(strings.text(.noParameterMetadata))
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
@@ -644,7 +694,8 @@ struct PluginSettingsCard: View {
         HStack {
             Text(label)
                 .font(.system(size: 13))
-                .frame(width: 80, alignment: .trailing)
+                .lineLimit(1)
+                .frame(width: 120, alignment: .trailing)
                 .foregroundStyle(.primary)
             value()
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -668,19 +719,21 @@ struct PluginSettingsCard: View {
 struct PluginParameterField: View {
     @Binding var plugin: PluginConfiguration
     var parameter: PluginParameterMetadata
+    var language: AppLanguage
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 HStack(spacing: 2) {
-                    Text(parameter.label)
+                    Text(parameter.localizedLabel(language: language))
                         .font(.system(size: 13))
+                        .lineLimit(1)
                     if parameter.required {
                         Text("*")
                             .foregroundStyle(.red)
                     }
                 }
-                .frame(width: 80, alignment: .trailing)
+                .frame(width: 120, alignment: .trailing)
                 input
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -693,10 +746,10 @@ struct PluginParameterField: View {
     private var input: some View {
         switch parameter.type {
         case .secret:
-            SecureField(parameter.placeholder ?? "", text: valueBinding)
+            SecureField(parameter.localizedPlaceholder(language: language) ?? "", text: valueBinding)
                 .textFieldStyle(.roundedBorder)
         case .integer:
-            TextField(parameter.placeholder ?? "", text: valueBinding)
+            TextField(parameter.localizedPlaceholder(language: language) ?? "", text: valueBinding)
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 160)
         case .boolean:
@@ -705,13 +758,13 @@ struct PluginParameterField: View {
         case .choice:
             Picker("", selection: valueBinding) {
                 ForEach(parameter.options) { option in
-                    Text(option.label).tag(option.value)
+                    Text(option.localizedLabel(language: language)).tag(option.value)
                 }
             }
             .pickerStyle(.radioGroup)
             .labelsHidden()
         case .string:
-            TextField(parameter.placeholder ?? "", text: valueBinding)
+            TextField(parameter.localizedPlaceholder(language: language) ?? "", text: valueBinding)
                 .textFieldStyle(.roundedBorder)
         }
     }

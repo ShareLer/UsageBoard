@@ -13,6 +13,8 @@ final class UsageBoardStore: ObservableObject {
     @Published var isUpdating: Bool = false
     @Published var selectedTabID: UUID?
 
+    let activeLanguage: AppLanguage
+
     private let configStore: ConfigStore
     private let stateStore: PluginStateStore
     private let executor: PluginExecutor
@@ -29,21 +31,26 @@ final class UsageBoardStore: ObservableObject {
         self.stateStore = stateStore
         self.executor = executor
         self.updateChecker = updateChecker
+        let loadedConfiguration: AppConfiguration
         var didLoadConfiguration = false
         do {
-            configuration = try configStore.loadOrCreate()
+            loadedConfiguration = try configStore.loadOrCreate()
             didLoadConfiguration = true
         } catch {
-            configuration = AppConfiguration()
+            loadedConfiguration = AppConfiguration()
             lastError = "配置加载失败：\(error.localizedDescription)"
         }
+        configuration = loadedConfiguration
+        activeLanguage = loadedConfiguration.language
         if didLoadConfiguration {
             try? configStore.save(configuration) // persist generated stateIDs
         }
         do {
             try installBundledPlugins()
         } catch {
-            lastError = "内置插件安装失败：\(error.localizedDescription)"
+            lastError = activeLanguage == .en
+                ? "Failed to install bundled plugins: \(error.localizedDescription)"
+                : "内置插件安装失败：\(error.localizedDescription)"
         }
         reloadAllMetadata()
         try? configStore.save(configuration)
@@ -57,7 +64,7 @@ final class UsageBoardStore: ObservableObject {
     }
 
     var displayNames: [UUID: String] {
-        PluginDisplayNames.make(for: configuration.plugins)
+        PluginDisplayNames.make(for: configuration.plugins, language: activeLanguage)
     }
 
     var pluginsDirectoryURL: URL {
@@ -79,7 +86,7 @@ final class UsageBoardStore: ObservableObject {
             startSchedulers()
             refreshPluginsAfterConfigurationChange()
         } catch {
-            lastError = "配置保存失败：\(error.localizedDescription)"
+            lastError = storeMessage(.configurationSaveFailed(error.localizedDescription))
         }
     }
 
@@ -110,7 +117,7 @@ final class UsageBoardStore: ObservableObject {
         do {
             try FileManager.default.createDirectory(at: pluginsDirectoryURL, withIntermediateDirectories: true)
         } catch {
-            lastError = "插件目录创建失败：\(error.localizedDescription)"
+            lastError = storeMessage(.pluginsDirectoryCreateFailed(error.localizedDescription))
         }
     }
 
@@ -127,7 +134,7 @@ final class UsageBoardStore: ObservableObject {
         let missing = missingRequiredParameters(for: plugin)
         guard missing.isEmpty else {
             configuration.plugins[index].enabled = false
-            lastError = "请先填写必填参数：\(missing.joined(separator: "、"))"
+            lastError = storeMessage(.missingRequiredParameters(missing))
             return
         }
 
@@ -203,10 +210,11 @@ final class UsageBoardStore: ObservableObject {
 
         let executor = executor
         let stateStore = stateStore
-        let displayName = displayNames[plugin.id] ?? plugin.name
+        let displayName = displayNames[plugin.id] ?? PluginDisplayNames.displayName(for: plugin, language: activeLanguage)
+        let language = activeLanguage
         Task {
             let snapshot = await Task.detached(priority: .utility) {
-                executor.run(configuration: plugin, displayName: displayName)
+                executor.run(configuration: plugin, displayName: displayName, language: language)
             }.value
             snapshots[plugin.id] = snapshot
             if snapshot.state == .ready, let updatedAt = snapshot.updatedAt {
@@ -229,7 +237,7 @@ final class UsageBoardStore: ObservableObject {
 
     func checkForUpdates(userInitiated: Bool = false) {
         guard let url = Self.updateCheckURL else {
-            updateMessage = "未配置更新检查地址"
+            updateMessage = storeMessage(.updateCheckURLMissing)
             return
         }
         availableUpdate = nil
@@ -241,10 +249,10 @@ final class UsageBoardStore: ObservableObject {
                     updateMessage = nil
                 } else {
                     availableUpdate = nil
-                    updateMessage = "当前已是最新版本"
+                    updateMessage = storeMessage(.alreadyLatestVersion)
                 }
             } catch {
-                updateMessage = "检查更新失败：\(error.localizedDescription)"
+                updateMessage = storeMessage(.updateCheckFailed(error.localizedDescription))
             }
         }
     }
@@ -252,18 +260,18 @@ final class UsageBoardStore: ObservableObject {
     func performUpdate() {
         guard let info = availableUpdate, let url = URL(string: info.downloadURL) else { return }
         isUpdating = true
-        updateMessage = "正在下载更新..."
+        updateMessage = storeMessage(.downloadingUpdate)
 
         Task {
             do {
                 let downloader = UpdateDownloader()
                 let newBundleURL = try await downloader.download(from: url)
-                updateMessage = "正在安装更新..."
+                updateMessage = storeMessage(.installingUpdate)
                 try AppRelauncher.relaunch(replacingWith: newBundleURL)
                 NSApp.terminate(nil)
             } catch {
                 isUpdating = false
-                updateMessage = "更新失败：\(error.localizedDescription)"
+                updateMessage = storeMessage(.updateFailed(error.localizedDescription))
             }
         }
     }
@@ -373,7 +381,7 @@ final class UsageBoardStore: ObservableObject {
         for parameter in plugin.metadata?.parameters ?? [] where parameter.required {
             let value = plugin.parameterValues[parameter.name] ?? parameter.defaultValue ?? ""
             if value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                missing.append(parameter.label)
+                missing.append(parameter.localizedLabel(language: activeLanguage))
             }
         }
         return missing
@@ -390,7 +398,7 @@ final class UsageBoardStore: ObservableObject {
         PluginSnapshot(
             id: plugin.id,
             pluginName: plugin.name,
-            displayName: displayNames[plugin.id] ?? plugin.name,
+            displayName: displayNames[plugin.id] ?? PluginDisplayNames.displayName(for: plugin, language: activeLanguage),
             state: state,
             items: items,
             updatedAt: updatedAt,
@@ -414,8 +422,66 @@ final class UsageBoardStore: ObservableObject {
                 try SMAppService.mainApp.unregister()
             }
         } catch {
-            lastError = "开机启动设置失败：\(error.localizedDescription)"
+            lastError = storeMessage(.launchAtLoginFailed(error.localizedDescription))
             configuration.launchAtLogin = !enabled
+        }
+    }
+
+    private enum StoreMessage {
+        case configurationSaveFailed(String)
+        case pluginsDirectoryCreateFailed(String)
+        case missingRequiredParameters([String])
+        case updateCheckURLMissing
+        case alreadyLatestVersion
+        case updateCheckFailed(String)
+        case downloadingUpdate
+        case installingUpdate
+        case updateFailed(String)
+        case launchAtLoginFailed(String)
+    }
+
+    private func storeMessage(_ message: StoreMessage) -> String {
+        switch (message, activeLanguage) {
+        case (.configurationSaveFailed(let detail), .en):
+            return "Failed to save configuration: \(detail)"
+        case (.configurationSaveFailed(let detail), .zhHans):
+            return "配置保存失败：\(detail)"
+        case (.pluginsDirectoryCreateFailed(let detail), .en):
+            return "Failed to create plugins folder: \(detail)"
+        case (.pluginsDirectoryCreateFailed(let detail), .zhHans):
+            return "插件目录创建失败：\(detail)"
+        case (.missingRequiredParameters(let names), .en):
+            return "Fill required parameters first: \(names.joined(separator: ", "))"
+        case (.missingRequiredParameters(let names), .zhHans):
+            return "请先填写必填参数：\(names.joined(separator: "、"))"
+        case (.updateCheckURLMissing, .en):
+            return "Update check URL is not configured"
+        case (.updateCheckURLMissing, .zhHans):
+            return "未配置更新检查地址"
+        case (.alreadyLatestVersion, .en):
+            return "You are on the latest version"
+        case (.alreadyLatestVersion, .zhHans):
+            return "当前已是最新版本"
+        case (.updateCheckFailed(let detail), .en):
+            return "Failed to check for updates: \(detail)"
+        case (.updateCheckFailed(let detail), .zhHans):
+            return "检查更新失败：\(detail)"
+        case (.downloadingUpdate, .en):
+            return "Downloading update..."
+        case (.downloadingUpdate, .zhHans):
+            return "正在下载更新..."
+        case (.installingUpdate, .en):
+            return "Installing update..."
+        case (.installingUpdate, .zhHans):
+            return "正在安装更新..."
+        case (.updateFailed(let detail), .en):
+            return "Update failed: \(detail)"
+        case (.updateFailed(let detail), .zhHans):
+            return "更新失败：\(detail)"
+        case (.launchAtLoginFailed(let detail), .en):
+            return "Failed to update launch at login: \(detail)"
+        case (.launchAtLoginFailed(let detail), .zhHans):
+            return "开机启动设置失败：\(detail)"
         }
     }
 }

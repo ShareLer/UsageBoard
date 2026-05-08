@@ -119,7 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
             .frame(minWidth: 700, minHeight: 480)
         let hostingController = NSHostingController(rootView: settingsView)
         let window = NSWindow(contentViewController: hostingController)
-        window.title = "UsageBoard Settings"
+        window.title = store.activeLanguage == .en ? "UsageBoard Settings" : "UsageBoard 设置"
         window.setContentSize(NSSize(width: 780, height: 560))
         window.minSize = NSSize(width: 700, height: 480)
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable]

@@ -30,17 +30,21 @@ struct DashboardView: View {
         store.configuration.plugins.filter(\.enabled)
     }
 
+    private var strings: AppLocalization {
+        AppLocalization(language: store.activeLanguage)
+    }
+
     var body: some View {
         Group {
             if enabledPlugins.isEmpty {
-                EmptyPluginsView()
+                EmptyPluginsView(language: store.activeLanguage)
             } else {
                 switch mode {
                 case .grouped:
                     MeasuredScrollView(maxHeight: maxHeight) {
                         LazyVStack(spacing: 10) {
                             ForEach(enabledPlugins) { plugin in
-                                PluginGroupView(snapshot: store.snapshot(for: plugin)) {
+                                PluginGroupView(snapshot: store.snapshot(for: plugin), language: store.activeLanguage) {
                                     store.refresh(pluginID: plugin.id, force: true)
                                 }
                             }
@@ -85,7 +89,7 @@ struct DashboardView: View {
                         }
                         Divider()
                         if let plugin = selectedPlugin {
-                            PluginGroupView(snapshot: store.snapshot(for: plugin)) {
+                            PluginGroupView(snapshot: store.snapshot(for: plugin), language: store.activeLanguage) {
                                 store.refresh(pluginID: plugin.id, force: true)
                             }
                             .padding(10)
@@ -104,9 +108,9 @@ struct DashboardView: View {
             Button {
                 store.refreshAll()
             } label: {
-                Label("刷新", systemImage: "arrow.clockwise")
+                Label(strings.text(.refresh), systemImage: "arrow.clockwise")
             }
-            QuitButton()
+            QuitButton(language: store.activeLanguage)
         }
     }
 
@@ -139,14 +143,19 @@ struct DashboardView: View {
 }
 
 struct EmptyPluginsView: View {
+    var language: AppLanguage
+    private var strings: AppLocalization {
+        AppLocalization(language: language)
+    }
+
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "puzzlepiece.extension")
                 .font(.system(size: 40))
                 .foregroundStyle(.secondary)
-            Text("暂无插件")
+            Text(strings.text(.noPluginsTitle))
                 .font(.headline)
-            Text("在设置中添加插件后显示用量。")
+            Text(strings.text(.noPluginsDescription))
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
@@ -177,7 +186,7 @@ struct OverviewView: View {
                 }
                 .buttonStyle(.borderless)
                 SettingsButton(iconSize: 13, buttonSize: 24)
-                QuitButton(iconSize: 13, buttonSize: 24)
+                QuitButton(language: store.activeLanguage, iconSize: 13, buttonSize: 24)
             }
             .padding(.horizontal)
             .padding(.vertical, 10)
@@ -223,8 +232,12 @@ private struct ContentHeightKey: PreferenceKey {
 
 struct PluginGroupView: View {
     var snapshot: PluginSnapshot
+    var language: AppLanguage
     var onRefresh: (() -> Void)?
     @State private var isChartExpanded = false
+    private var strings: AppLocalization {
+        AppLocalization(language: language)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -256,7 +269,7 @@ struct PluginGroupView: View {
             } else {
                 VStack(spacing: 8) {
                     ForEach(snapshot.items) { item in
-                        UsageItemRow(item: item)
+                        UsageItemRow(item: item, language: language)
                     }
                 }
             }
@@ -273,10 +286,10 @@ struct PluginGroupView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
-                .help(isChartExpanded ? "收起 token 统计" : "展开 token 统计")
+                .help(isChartExpanded ? strings.text(.collapseTokenStats) : strings.text(.expandTokenStats))
 
                 if isChartExpanded {
-                    TokenUsageChartView(chart: chart)
+                    TokenUsageChartView(chart: chart, language: language)
                 }
             }
         }
@@ -305,7 +318,7 @@ struct PluginGroupView: View {
     private var stateView: some View {
         switch snapshot.state {
         case .idle:
-            Text("等待刷新")
+            Text(strings.text(.waitingRefresh))
                 .foregroundStyle(.secondary)
         case .loading:
             ProgressView()
@@ -333,15 +346,16 @@ struct PluginGroupView: View {
     private var emptyText: String {
         switch snapshot.state {
         case .failed:
-            return "插件执行失败"
+            return strings.text(.pluginFailed)
         default:
-            return "暂无用量数据"
+            return strings.text(.noUsageData)
         }
     }
 }
 
 struct UsageItemRow: View {
     var item: UsageItem
+    var language: AppLanguage
 
     var body: some View {
         HStack(spacing: 6) {
@@ -354,7 +368,7 @@ struct UsageItemRow: View {
                 .frame(height: 18)
                 .layoutPriority(1)
 
-            Text(item.resetText())
+            Text(item.resetText(language: language))
                 .font(.caption)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -367,19 +381,23 @@ struct UsageItemRow: View {
 
 struct TokenUsageChartView: View {
     var chart: PluginChart
+    var language: AppLanguage
     @State private var selectedSeries: String?
+    private var strings: AppLocalization {
+        AppLocalization(language: language)
+    }
 
     private var series: [TokenChartSeries] {
         var output = [
             TokenChartSeries(
-                name: "Token 消耗总量",
+                name: strings.text(.totalTokenUsage),
                 color: .blue,
                 values: chart.buckets.map(\.total)
             )
         ]
         output.append(contentsOf: modelSummaries.map { summary in
             TokenChartSeries(
-                name: "\(summary.name) 消耗",
+                name: strings.usageSuffix(for: summary.name),
                 color: summary.color,
                 values: chart.buckets.map { bucket in
                     bucket.segments.first(where: { $0.model == summary.name })?.tokens ?? 0
@@ -424,34 +442,34 @@ struct TokenUsageChartView: View {
             if chart.buckets.contains(where: { !$0.segments.isEmpty }) {
                 FlowLayout(spacing: 8, rowSpacing: 6) {
                     Button {
-                        selectedSeries = selectedSeries == "Token 消耗总量" ? nil : "Token 消耗总量"
+                        selectedSeries = selectedSeries == strings.text(.totalTokenUsage) ? nil : strings.text(.totalTokenUsage)
                     } label: {
                         TokenMetricView(
-                            title: "Token 消耗总量",
+                            title: strings.text(.totalTokenUsage),
                             value: totalTokens,
                             color: .blue,
-                            isSelected: selectedSeries == "Token 消耗总量"
+                            isSelected: selectedSeries == strings.text(.totalTokenUsage)
                         )
                         .contentShape(RoundedRectangle(cornerRadius: 6))
                     }
                     .buttonStyle(.plain)
-                    .help(selectedSeries == "Token 消耗总量" ? "显示全部曲线" : "只显示消耗总量")
+                    .help(selectedSeries == strings.text(.totalTokenUsage) ? strings.text(.showAllLines) : strings.text(.showOnlyTotalUsage))
 
                     ForEach(modelSummaries) { summary in
                         Button {
-                            let seriesName = "\(summary.name) 消耗"
+                            let seriesName = strings.usageSuffix(for: summary.name)
                             selectedSeries = selectedSeries == seriesName ? nil : seriesName
                         } label: {
                             TokenMetricView(
-                                title: "\(summary.name) 消耗",
+                                title: strings.usageSuffix(for: summary.name),
                                 value: summary.total,
                                 color: summary.color,
-                                isSelected: selectedSeries == "\(summary.name) 消耗"
+                                isSelected: selectedSeries == strings.usageSuffix(for: summary.name)
                             )
                             .contentShape(RoundedRectangle(cornerRadius: 6))
                         }
                         .buttonStyle(.plain)
-                        .help(selectedSeries == "\(summary.name) 消耗" ? "显示全部曲线" : "只显示 \(summary.name)")
+                        .help(selectedSeries == strings.usageSuffix(for: summary.name) ? strings.text(.showAllLines) : strings.showOnlyUsageSuffix(for: summary.name))
                     }
                 }
 
@@ -470,7 +488,7 @@ struct TokenUsageChartView: View {
                 }
                 .frame(height: 190)
             } else {
-                Text(chart.message ?? "暂无可用统计数据")
+                Text(chart.message ?? strings.text(.noStatsData))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -914,8 +932,12 @@ private struct SettingsButton: View {
 }
 
 private struct QuitButton: View {
+    var language: AppLanguage = .zhHans
     var iconSize: CGFloat = 13
     var buttonSize: CGFloat = 24
+    private var strings: AppLocalization {
+        AppLocalization(language: language)
+    }
 
     var body: some View {
         Button {
@@ -926,7 +948,7 @@ private struct QuitButton: View {
                 .frame(width: buttonSize, height: buttonSize)
         }
         .buttonStyle(.borderless)
-        .help("退出 UsageBoard")
+        .help(strings.text(.quitUsageBoard))
     }
 }
 
