@@ -53,6 +53,8 @@ from typing import Any
 
 ENDPOINT = "https://chatgpt.com/backend-api/wham/usage"
 SCHEMA_VERSION = 1
+CACHE_VERSION = 1
+CACHE_FILENAME = ".usageboard-chart-cache.json"
 
 
 def utc_now_iso() -> str:
@@ -236,6 +238,149 @@ def chart_message(msg: str, period: str, buckets: list[datetime], unit: str) -> 
         ],
         "message": msg,
     }
+
+
+def _cache_path(data_dir: str) -> str:
+    return os.path.join(os.path.expanduser(data_dir), CACHE_FILENAME)
+
+
+def _parse_date(s: str) -> ...:
+    return datetime.strptime(s, "%Y-%m-%d").date()
+
+
+def _format_date(d) -> str:
+    return d.strftime("%Y-%m-%d")
+
+
+def load_chart_cache(data_dir: str) -> dict[str, Any] | None:
+    path = _cache_path(data_dir)
+    if not os.path.isfile(path):
+        return None
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        if data.get("version") != CACHE_VERSION:
+            return None
+        return data
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def save_chart_cache(data_dir: str, cache_data: dict[str, Any]) -> None:
+    path = _cache_path(data_dir)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(cache_data, f)
+    except OSError:
+        pass
+
+
+def maintain_chart_cache(data_dir: str, language: str) -> dict[str, dict[str, float]]:
+    """Build and maintain a 30-day chart cache. Returns {date: {model: tokens}}."""
+    today = datetime.now().date()
+    cutoff = today - timedelta(days=29)
+    now = datetime.now(timezone.utc)
+    tz = datetime.now().astimezone().tzinfo
+
+    cache = load_chart_cache(data_dir)
+
+    if cache is None:
+        start = datetime.combine(cutoff, time.min, tzinfo=tz) - timedelta(hours=14)
+        end = datetime.combine(today, time.max, tzinfo=tz).replace(microsecond=0)
+        buckets = [cutoff + timedelta(days=i) for i in range(30) if cutoff + timedelta(days=i) <= today]
+        files = collect_session_files(data_dir, cutoff, today)
+        result = parse_sessions_for_chart(files, buckets, "day", "30d", language)
+        days = {}
+        for b in result["buckets"]:
+            if b["segments"]:
+                days[b["id"]] = {s["model"]: s["tokens"] for s in b["segments"]}
+        save_chart_cache(data_dir, {
+            "version": CACHE_VERSION,
+            "last_date": _format_date(today),
+            "days": days,
+        })
+        return days
+
+    last_date = _parse_date(cache.get("last_date", "2000-01-01"))
+    gap_days = (today - last_date).days
+
+    if gap_days <= 0:
+        return cache.get("days", {})
+
+    if gap_days > 30:
+        start = datetime.combine(cutoff, time.min, tzinfo=tz) - timedelta(hours=14)
+        end = datetime.combine(today, time.max, tzinfo=tz).replace(microsecond=0)
+        buckets = [cutoff + timedelta(days=i) for i in range(30) if cutoff + timedelta(days=i) <= today]
+        files = collect_session_files(data_dir, cutoff, today)
+        result = parse_sessions_for_chart(files, buckets, "day", "30d", language)
+        days = {}
+        for b in result["buckets"]:
+            if b["segments"]:
+                days[b["id"]] = {s["model"]: s["tokens"] for s in b["segments"]}
+        save_chart_cache(data_dir, {
+            "version": CACHE_VERSION,
+            "last_date": _format_date(today),
+            "days": days,
+        })
+        return days
+
+    scan_start = last_date + timedelta(days=1)
+    start = datetime.combine(scan_start, time.min, tzinfo=tz) - timedelta(hours=14)
+    end = datetime.combine(today, time.max, tzinfo=tz).replace(microsecond=0)
+    scan_dates = [scan_start + timedelta(days=i) for i in range(gap_days) if scan_start + timedelta(days=i) <= today]
+    files = collect_session_files(data_dir, scan_start, today)
+    result = parse_sessions_for_chart(files, scan_dates, "day", "30d", language)
+    new_days = {}
+    for b in result["buckets"]:
+        if b["segments"]:
+            new_days[b["id"]] = {s["model"]: s["tokens"] for s in b["segments"]}
+
+    merged = {}
+    for d, v in cache.get("days", {}).items():
+        if _parse_date(d) >= cutoff:
+            merged[d] = v
+    for d in range(gap_days):
+        date_str = _format_date(last_date + timedelta(days=d + 1))
+        if date_str in new_days:
+            merged[date_str] = new_days[date_str]
+        elif date_str not in merged and _parse_date(date_str) <= today:
+            merged[date_str] = {}
+
+    save_chart_cache(data_dir, {
+        "version": CACHE_VERSION,
+        "last_date": _format_date(today),
+        "days": merged,
+    })
+    return merged
+
+
+def build_chart_from_cache(daily: dict[str, dict[str, float]], period: str, language: str) -> dict[str, Any]:
+    """Build chart output from cached daily data for the requested period."""
+    day_count = 7 if period == "7d" else 30
+    today = datetime.now().date()
+    date_list = [_format_date(today - timedelta(days=i)) for i in range(day_count - 1, -1, -1)]
+
+    model_totals: dict[str, float] = {}
+    for date in date_list:
+        for model, tokens in daily.get(date, {}).items():
+            model_totals[model] = model_totals.get(model, 0) + tokens
+    sorted_models = [m for m, _ in sorted(model_totals.items(), key=lambda x: -x[1])]
+
+    buckets: list[dict[str, Any]] = []
+    for date in date_list:
+        day_data = daily.get(date, {})
+        segments = [
+            {"model": m, "tokens": int(day_data.get(m, 0))}
+            for m in sorted_models
+            if day_data.get(m, 0) > 0
+        ]
+        buckets.append({"id": date, "label": date[5:], "segments": segments})
+
+    message = None
+    if not any(b["segments"] for b in buckets):
+        message = translate(language, "no_stats_data")
+
+    return {"kind": "line", "period": period, "bucketUnit": "day", "buckets": buckets, "message": message}
 
 
 _FILENAME_DATE = re.compile(r"rollout-(\d{4}-\d{2}-\d{2})T")
@@ -478,11 +623,11 @@ def main() -> int:
     except Exception as error:
         return failure(str(error), language)
 
-    start, end, buckets, bucket_unit = stat_range(period)
     try:
-        session_files = collect_session_files(data_dir, start, end)
-        chart = parse_sessions_for_chart(session_files, buckets, bucket_unit, period, language)
+        daily = maintain_chart_cache(data_dir, language)
+        chart = build_chart_from_cache(daily, period, language)
     except Exception:
+        _, _, buckets, bucket_unit = stat_range(period)
         chart = chart_message(translate(language, "stats_parse_failed"), period, buckets, bucket_unit)
 
     if not items:
