@@ -8,6 +8,7 @@ final class UsageBoardTests: XCTestCase {
         let data = #"{"plugins":[{"name":"A","executablePath":"/bin/echo"}]}"#.data(using: .utf8)!
         let configuration = try UsageBoardJSON.decoder().decode(AppConfiguration.self, from: data)
         XCTAssertEqual(configuration.schemaVersion, 1)
+        XCTAssertEqual(configuration.language, .zhHans)
         XCTAssertEqual(configuration.overviewDisplayMode, .tabs)
         XCTAssertEqual(configuration.plugins.first?.refreshIntervalSeconds, 300)
 
@@ -15,6 +16,8 @@ final class UsageBoardTests: XCTestCase {
         let store = ConfigStore(fileURL: url)
         try store.save(configuration)
         let reloaded = try store.load()
+        let savedText = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(savedText.contains(#""language" : "zh-Hans""#))
         XCTAssertEqual(reloaded.plugins.first?.name, "A")
     }
 
@@ -75,6 +78,7 @@ final class UsageBoardTests: XCTestCase {
         let output = try UsageBoardJSON.decoder().decode(PluginOutput.self, from: json)
         let item = try XCTUnwrap(output.items.first)
         XCTAssertEqual(item.progress, 0.8)
+        XCTAssertEqual(item.name, "Requests")
         XCTAssertEqual(item.displayValue(), "80%")
         let now = ISO8601DateFormatter().date(from: "2026-04-29T00:00:00Z")!
         let text = item.resetText(now: now)
@@ -109,7 +113,8 @@ final class UsageBoardTests: XCTestCase {
                   {"model": "glm-4.5", "tokens": 1200}
                 ]
               }
-            ]
+            ],
+            "message": "暂无可用统计数据"
           }
         }
         """.data(using: .utf8)!
@@ -118,11 +123,15 @@ final class UsageBoardTests: XCTestCase {
         let chart = try XCTUnwrap(output.chart)
         XCTAssertEqual(chart.period, "7d")
         XCTAssertEqual(chart.buckets.first?.total, 1200)
+        XCTAssertEqual(chart.message, "暂无可用统计数据")
+        XCTAssertEqual(chart.buckets.first?.label, "05-01")
 
         let cached = PluginCachedState(updatedAt: output.updatedAt, items: output.items, chart: chart)
         let encoded = try UsageBoardJSON.encoder().encode(cached)
         let decoded = try UsageBoardJSON.decoder().decode(PluginCachedState.self, from: encoded)
         XCTAssertEqual(decoded.chart, chart)
+        XCTAssertEqual(decoded.items.first?.name, "Requests")
+        XCTAssertEqual(decoded.chart?.buckets.first?.label, "05-01")
     }
 
     func testPluginExecutorPropagatesChart() throws {
@@ -188,6 +197,8 @@ final class UsageBoardTests: XCTestCase {
         let text = item.resetText(now: now)
         XCTAssertFalse(text.isEmpty)
         XCTAssertNotEqual(text, "--")
+        XCTAssertTrue(text.hasPrefix("明天 "))
+        XCTAssertTrue(item.resetText(now: now, language: .en).hasPrefix("Tomorrow "))
         XCTAssertEqual(item.resetText(now: resetAt), "--")
     }
 
@@ -198,15 +209,18 @@ final class UsageBoardTests: XCTestCase {
         # {
         #   "schemaVersion": 1,
         #   "name": "GLM",
+        #   "name@en": "Zhipu",
+        #   "description": "查询智谱用量",
+        #   "description@en": "Query Zhipu usage",
         #   "parameters": [
-        #     {"name": "API_KEY", "label": "Api Key", "type": "string", "required": true},
+        #     {"name": "API_KEY", "label": "Api Key", "label@en": "API Key", "type": "string", "required": true, "placeholder": "密钥", "placeholder@en": "Secret key"},
         #     {
         #       "name": "PROVIDER",
         #       "label": "Provider",
         #       "type": "choice",
         #       "defaultValue": "GLM",
         #       "options": [
-        #         {"label": "GLM", "value": "GLM"},
+        #         {"label": "智谱", "label@en": "GLM", "value": "GLM"},
         #         {"label": "ZAI", "value": "ZAI"}
         #       ]
         #     }
@@ -218,11 +232,24 @@ final class UsageBoardTests: XCTestCase {
 
         let metadata = try XCTUnwrap(PluginMetadataParser.parse(text: script))
         XCTAssertEqual(metadata.name, "GLM")
+        XCTAssertEqual(metadata.localizedName(language: .en), "Zhipu")
+        XCTAssertEqual(metadata.localizedDescription(language: .en), "Query Zhipu usage")
+        XCTAssertEqual(metadata.localizedDescription(language: .zhHans), "查询智谱用量")
         XCTAssertEqual(metadata.parameters.first?.name, "API_KEY")
+        XCTAssertEqual(metadata.parameters.first?.localizedLabel(language: .en), "API Key")
+        XCTAssertEqual(metadata.parameters.first?.localizedPlaceholder(language: .en), "Secret key")
         XCTAssertEqual(metadata.parameters.first?.type, .string)
         XCTAssertEqual(metadata.parameters.first?.required, true)
         XCTAssertEqual(metadata.parameters.last?.type, .choice)
         XCTAssertEqual(metadata.parameters.last?.options.map(\.value), ["GLM", "ZAI"])
+        XCTAssertEqual(metadata.parameters.last?.options.first?.localizedLabel(language: .en), "GLM")
+        XCTAssertEqual(metadata.parameters.last?.options.last?.localizedLabel(language: .en), "ZAI")
+
+        let encoded = try UsageBoardJSON.encoder().encode(metadata)
+        let decoded = try UsageBoardJSON.decoder().decode(PluginMetadata.self, from: encoded)
+        XCTAssertEqual(decoded.localizedName(language: .en), "Zhipu")
+        XCTAssertEqual(decoded.parameters.first?.localizedPlaceholder(language: .en), "Secret key")
+        XCTAssertEqual(decoded.parameters.last?.options.first?.localizedLabel(language: .en), "GLM")
     }
 
     func testGLMPluginMetadataUsesStatPeriodWithoutProvider() throws {
@@ -253,6 +280,19 @@ final class UsageBoardTests: XCTestCase {
         XCTAssertEqual(names[third.id], "Other")
     }
 
+    func testLocalizedPluginDisplayNamesUseMetadataUnlessUserCustomized() {
+        let metadata = PluginMetadata(name: "智谱", nameTranslations: ["en": "Zhipu"])
+        let defaultName = PluginConfiguration(name: "智谱", executablePath: "/bin/echo", metadata: metadata)
+        let customName = PluginConfiguration(name: "我的智谱", executablePath: "/bin/echo", metadata: metadata)
+        let emptyName = PluginConfiguration(name: "", executablePath: "/bin/echo", metadata: metadata)
+
+        let names = PluginDisplayNames.make(for: [defaultName, customName, emptyName], language: .en)
+
+        XCTAssertEqual(names[defaultName.id], "Zhipu")
+        XCTAssertEqual(names[customName.id], "我的智谱")
+        XCTAssertEqual(names[emptyName.id], "Zhipu 2")
+    }
+
     func testPluginParameterValuesBecomeArguments() {
         let executor = PluginExecutor()
         let configuration = PluginConfiguration(
@@ -268,6 +308,14 @@ final class UsageBoardTests: XCTestCase {
         XCTAssertEqual(
             executor.pluginParameterArguments(configuration: configuration),
             ["--usageboard-param", "API_KEY=secret", "--usageboard-param", "PROVIDER=ZAI"]
+        )
+        XCTAssertEqual(
+            executor.pluginParameterArguments(configuration: configuration, language: .en),
+            [
+                "--usageboard-param", "API_KEY=secret",
+                "--usageboard-param", "PROVIDER=ZAI",
+                "--usageboard-param", "USAGEBOARD_LANGUAGE=en"
+            ]
         )
     }
 
