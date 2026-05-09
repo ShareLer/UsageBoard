@@ -2,8 +2,11 @@
 
 import importlib.util
 import json
+import os
 import sys
+import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from io import StringIO
 from unittest.mock import patch
@@ -99,6 +102,54 @@ class TestFailureFormat(unittest.TestCase):
             plugin.failure("test error")
             output = json.loads(mock_out.getvalue())
         self.assertNotIn("items", output)
+
+
+class TestMaintainCacheRefreshesToday(unittest.TestCase):
+    """maintain_cache must re-scan today's data on subsequent runs (gap_days == 0).
+
+    Regression test for bug: previously, `if gap_days <= 0: return cache` froze today's
+    data after the first scan of the day, so usage that happened later wouldn't show up.
+    """
+
+    def _write_jsonl(self, path, ts_iso, model, tokens):
+        record = {
+            "type": "assistant",
+            "timestamp": ts_iso,
+            "message": {
+                "id": f"msg-{ts_iso}",
+                "model": model,
+                "usage": {"input_tokens": 0, "output_tokens": tokens, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0},
+            },
+        }
+        with open(path, "a") as f:
+            f.write(json.dumps(record) + "\n")
+
+    def test_today_is_rescanned_when_gap_days_is_zero(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            projects = os.path.join(tmp, "projects", "p1")
+            os.makedirs(projects)
+            jsonl = os.path.join(projects, "session.jsonl")
+
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            now = datetime.now().astimezone()
+            earlier = now - timedelta(minutes=10)
+            later = now - timedelta(minutes=2)
+
+            # First run: today has 100 tokens
+            self._write_jsonl(jsonl, earlier.isoformat(), "claude-sonnet", 100)
+            result1 = plugin.maintain_cache(tmp)
+            self.assertEqual(result1.get(today_str, {}).get("claude-sonnet", 0), 100)
+
+            # Append more usage in the same day — simulate user activity since first run
+            self._write_jsonl(jsonl, later.isoformat(), "claude-sonnet", 250)
+
+            # Second run (same day, gap_days == 0) — must pick up the 250 new tokens
+            result2 = plugin.maintain_cache(tmp)
+            self.assertEqual(
+                result2.get(today_str, {}).get("claude-sonnet", 0),
+                350,
+                "Today's data must be re-scanned on subsequent runs, not returned from cache as-is",
+            )
 
 
 if __name__ == "__main__":

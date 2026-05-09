@@ -275,14 +275,13 @@ def maintain_chart_cache(data_dir: str, language: str) -> dict[str, dict[str, fl
     last_date = _parse_date(cache.get("last_date", "2000-01-01"))
     gap_days = (today - last_date).days
 
-    if gap_days <= 0:
-        return cache.get("days", {})
-
-    if gap_days > 30:
+    if gap_days < 0 or gap_days > 30:
         return full_scan_and_save()
 
-    scan_start = last_date + timedelta(days=1)
-    scan_dates = [scan_start + timedelta(days=i) for i in range(gap_days) if scan_start + timedelta(days=i) <= today]
+    # Today is always dirty — re-scan it. If gap_days >= 1, also scan the missed days.
+    scan_start = today if gap_days == 0 else last_date + timedelta(days=1)
+    day_count = (today - scan_start).days + 1
+    scan_dates = [scan_start + timedelta(days=i) for i in range(day_count)]
     files = collect_session_files(data_dir, scan_start, today)
     result = parse_sessions_for_chart(files, scan_dates, "day", "30d", language)
     new_days = {}
@@ -292,14 +291,13 @@ def maintain_chart_cache(data_dir: str, language: str) -> dict[str, dict[str, fl
 
     merged = {}
     for d, v in cache.get("days", {}).items():
-        if _parse_date(d) >= cutoff:
+        parsed = _parse_date(d)
+        if cutoff <= parsed < scan_start:
             merged[d] = v
-    for d in range(gap_days):
-        date_str = _format_date(last_date + timedelta(days=d + 1))
-        if date_str in new_days:
-            merged[date_str] = new_days[date_str]
-        elif date_str not in merged and _parse_date(date_str) <= today:
-            merged[date_str] = {}
+
+    for i in range(day_count):
+        date_str = _format_date(scan_start + timedelta(days=i))
+        merged[date_str] = new_days.get(date_str, {})
 
     save_chart_cache(data_dir, {
         "version": CACHE_VERSION,

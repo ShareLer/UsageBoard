@@ -359,31 +359,27 @@ def maintain_cache(data_dir):
     last_date = _parse_date(cache.get("last_date", "2000-01-01"))
     gap_days = (today - last_date).days
 
-    if gap_days <= 0:
-        return cache.get("days", {})
-
-    if gap_days > 30:
+    if gap_days < 0 or gap_days > 30:
         return full_scan_and_save()
 
-    # Incremental: scan from last_date+1 to today, only files modified since then
-    scan_start = last_date + timedelta(days=1)
+    # Today is always dirty — re-scan it. If gap_days >= 1, also scan the missed days.
+    scan_start = today if gap_days == 0 else last_date + timedelta(days=1)
     start_dt = datetime.combine(scan_start, datetime.min.time(), tzinfo=now.astimezone().tzinfo) - timedelta(hours=14)
     cutoff_ts = start_dt.timestamp()
     recent_files = [f for f in all_jsonl_files(data_dir) if os.path.getmtime(f) >= cutoff_ts]
     records = parse_records(recent_files, start_dt, now)
     new_days = group_by_local_date(records)
 
-    # Merge into existing cache, drop dates before cutoff
     merged = {}
     for d, v in cache.get("days", {}).items():
-        if _parse_date(d) >= cutoff:
+        parsed = _parse_date(d)
+        if cutoff <= parsed < scan_start:
             merged[d] = v
-    for d in range(gap_days):
-        date_str = _format_date(last_date + timedelta(days=d + 1))
-        if date_str in new_days:
-            merged[date_str] = new_days[date_str]
-        elif date_str not in merged and _parse_date(date_str) <= today:
-            merged[date_str] = {}
+
+    day_count = (today - scan_start).days + 1
+    for i in range(day_count):
+        date_str = _format_date(scan_start + timedelta(days=i))
+        merged[date_str] = new_days.get(date_str, {})
 
     save_stats_cache(data_dir, {
         "version": CACHE_VERSION,
