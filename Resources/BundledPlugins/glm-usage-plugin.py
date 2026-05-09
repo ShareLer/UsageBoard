@@ -27,7 +27,8 @@
 #       "required": true,
 #       "defaultValue": "7d",
 #       "options": [
-#         {"label": "7 天", "label@zh-Hans": "7 天", "label@en": "7 days", "value": "7d"},
+#         {"label": "7 天",  "label@zh-Hans": "7 天",  "label@en": "7 days",  "value": "7d"},
+#         {"label": "15 天", "label@zh-Hans": "15 天", "label@en": "15 days", "value": "15d"},
 #         {"label": "30 天", "label@zh-Hans": "30 天", "label@en": "30 days", "value": "30d"}
 #       ]
 #     }
@@ -80,7 +81,7 @@ def get_api_key(argv: list[str]) -> str | None:
 def get_stat_period(argv: list[str]) -> str:
     params = parse_usageboard_params(argv)
     period = params.get("STAT_PERIOD", "7d").lower()
-    return period if period in ("7d", "30d") else "7d"
+    return period if period in ("7d", "15d", "30d") else "7d"
 
 
 def get_app_language(argv: list[str]) -> str:
@@ -179,7 +180,7 @@ def format_query_time(value: datetime) -> str:
 
 def stat_range(period: str) -> tuple[datetime, datetime, list[datetime], str]:
     now = datetime.now().astimezone()
-    day_count = 7 if period == "7d" else 30
+    day_count = {"7d": 7, "15d": 15, "30d": 30}.get(period, 7)
     today = now.date()
     start_date = today - timedelta(days=day_count - 1)
     start = datetime.combine(start_date, time.min, tzinfo=now.tzinfo)
@@ -709,7 +710,7 @@ def main() -> int:
     params = parse_usageboard_params(sys.argv[1:])
     api_key = params.get("API_KEY")
     period = params.get("STAT_PERIOD", "7d").lower()
-    if period not in ("7d", "30d"):
+    if period not in ("7d", "15d", "30d"):
         period = "7d"
     language = "en" if params.get("USAGEBOARD_LANGUAGE") == "en" else "zh-Hans"
     if not api_key:

@@ -29,7 +29,8 @@
 #       "required": false,
 #       "defaultValue": "7d",
 #       "options": [
-#         {"label": "7 天", "label@zh-Hans": "7 天", "label@en": "7 days", "value": "7d"},
+#         {"label": "7 天",  "label@zh-Hans": "7 天",  "label@en": "7 days",  "value": "7d"},
+#         {"label": "15 天", "label@zh-Hans": "15 天", "label@en": "15 days", "value": "15d"},
 #         {"label": "30 天", "label@zh-Hans": "30 天", "label@en": "30 days", "value": "30d"}
 #       ]
 #     }
@@ -181,7 +182,7 @@ def color_for(used_pct: float) -> str:
 
 def stat_range(period: str) -> tuple[datetime, datetime, list[datetime], str]:
     now = datetime.now().astimezone()
-    day_count = 7 if period == "7d" else 30
+    day_count = {"7d": 7, "15d": 15, "30d": 30}.get(period, 7)
     today = now.date()
     start_date = today - timedelta(days=day_count - 1)
     start = datetime.combine(start_date, time.min, tzinfo=now.tzinfo)
@@ -325,7 +326,7 @@ def maintain_chart_cache(data_dir: str, language: str) -> dict[str, dict[str, fl
 
 def build_chart_from_cache(daily: dict[str, dict[str, float]], period: str, language: str) -> dict[str, Any]:
     """Build chart output from cached daily data for the requested period."""
-    day_count = 7 if period == "7d" else 30
+    day_count = {"7d": 7, "15d": 15, "30d": 30}.get(period, 7)
     today = datetime.now().date()
     date_list = [_format_date(today - timedelta(days=i)) for i in range(day_count - 1, -1, -1)]
 
@@ -541,7 +542,7 @@ def main() -> int:
     language = app_language(params)
     data_dir = params.get("DATA_DIR", "") or "~/.codex"
     period = params.get("STAT_PERIOD", "7d").lower()
-    if period not in ("7d", "30d"):
+    if period not in ("7d", "15d", "30d"):
         period = "7d"
 
     auth = load_auth(data_dir)

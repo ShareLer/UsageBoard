@@ -33,6 +33,7 @@
 #       "defaultValue": "7d",
 #       "options": [
 #         {"label": "7 days",  "label@zh-Hans": "7 天",  "label@en": "7 days",  "value": "7d"},
+#         {"label": "15 days", "label@zh-Hans": "15 天", "label@en": "15 days", "value": "15d"},
 #         {"label": "30 days", "label@zh-Hans": "30 天", "label@en": "30 days", "value": "30d"}
 #       ]
 #     },
@@ -200,13 +201,13 @@ def build_items_from_oauth(data, lang, params, daily):
     plan = params.get("PLAN", "pro")
     limit_5h = PLAN_5H.get(plan, 44_000)
 
-    stat_days = 30 if stat_period == "30d" else 7
+    stat_days = {"7d": 7, "15d": 15, "30d": 30}.get(stat_period, 7)
     date_list = [
         (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
         for i in range(stat_days - 1, -1, -1)
     ]
     tokens_stat = sum_tokens(daily, date_list, claude_only)
-    multiplier = 144 if stat_period == "30d" else 33.6
+    multiplier = {"7d": 33.6, "15d": 72.0, "30d": 144.0}.get(stat_period, 33.6)
     limit_stat_k = to_k(limit_5h * multiplier)
     stat_pct = (to_k(tokens_stat) / limit_stat_k * 100) if limit_stat_k > 0 else 0
 
@@ -419,7 +420,7 @@ def sum_tokens(daily, date_list, claude_only):
 def build_chart(params, daily, lang):
     stat_period = params.get("STAT_PERIOD", "7d")
     claude_only = params.get("CLAUDE_ONLY", "false").lower() == "true"
-    stat_days = 30 if stat_period == "30d" else 7
+    stat_days = {"7d": 7, "15d": 15, "30d": 30}.get(stat_period, 7)
 
     date_list = [
         (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
