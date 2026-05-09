@@ -358,9 +358,6 @@ struct PluginGroupView: View {
             }
             .buttonStyle(.borderless)
             .foregroundStyle(.secondary)
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-                .font(.system(size: 12))
         }
     }
 
