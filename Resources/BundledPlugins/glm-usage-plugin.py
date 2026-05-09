@@ -484,16 +484,6 @@ def apply_aligned_values(
         bucket_values[key][model] = bucket_values[key].get(model, 0) + tokens
 
 
-def iter_dicts(value: Any):
-    if isinstance(value, dict):
-        yield value
-        for child in value.values():
-            yield from iter_dicts(child)
-    elif isinstance(value, list):
-        for child in value:
-            yield from iter_dicts(child)
-
-
 def iter_records(value: Any, inherited_model: str | None = None):
     if isinstance(value, dict):
         model = extract_model(value) or inherited_model
