@@ -260,8 +260,21 @@ struct PluginGroupView: View {
 
             Divider()
 
-            if snapshot.items.isEmpty {
-                Text(emptyText)
+            if case .failed(let message) = snapshot.state {
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                        .font(.callout)
+                    Text(message)
+                        .font(.callout)
+                        .foregroundStyle(.red)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                }
+                .padding(.vertical, 8)
+            } else if snapshot.items.isEmpty {
+                Text(strings.text(.noUsageData))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -336,21 +349,13 @@ struct PluginGroupView: View {
                 Text(updatedAt, style: .time)
                     .foregroundStyle(.secondary)
             }
-        case .failed(let message):
-            Text(message)
-                .lineLimit(1)
-                .foregroundStyle(.red)
+        case .failed:
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .font(.system(size: 12))
         }
     }
 
-    private var emptyText: String {
-        switch snapshot.state {
-        case .failed:
-            return strings.text(.pluginFailed)
-        default:
-            return strings.text(.noUsageData)
-        }
-    }
 }
 
 struct UsageItemRow: View {
