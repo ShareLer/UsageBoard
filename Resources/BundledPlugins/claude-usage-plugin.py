@@ -74,12 +74,14 @@ CACHE_VERSION = 2
 CACHE_FILENAME = ".usageboard-chart-cache.json"
 
 TRANSLATIONS = {
-    "five_hour":     {"en": "5-hour usage",                     "zh-Hans": "5 小时用量"},
-    "weekly":        {"en": "Weekly usage",                      "zh-Hans": "周用量"},
-    "no_data_dir":   {"en": "Data directory not found",          "zh-Hans": "数据目录不存在"},
-    "login_hint":    {"en": "Please log in via Claude Code CLI", "zh-Hans": "请在 Claude Code CLI 中登录"},
-    "api_error":     {"en": "API request failed",                "zh-Hans": "API 请求失败"},
-    "no_stats_data": {"en": "No stats data available",           "zh-Hans": "暂无可用统计数据"},
+    "five_hour":     {"en": "5-hour usage",                                             "zh-Hans": "5 小时用量"},
+    "weekly":        {"en": "Weekly usage",                                              "zh-Hans": "周用量"},
+    "no_data_dir":   {"en": "~/.claude not found. Install Claude Code CLI first.",       "zh-Hans": "~/.claude 目录不存在，请先安装 Claude Code CLI"},
+    "login_hint":    {"en": "Not signed in. Run claude to sign in.",                     "zh-Hans": "未找到登录凭证，请运行 claude 登录"},
+    "api_error":     {"en": "API request failed. Check your network.",                   "zh-Hans": "API 请求失败，请检查网络"},
+    "api_401":       {"en": "Credentials expired. Sign in again.",                       "zh-Hans": "登录凭证已失效，请重新登录"},
+    "api_5xx":       {"en": "Service unavailable (HTTP {code})",                        "zh-Hans": "服务暂时不可用 (HTTP {code})"},
+    "no_stats_data": {"en": "No stats data available",                                   "zh-Hans": "暂无可用统计数据"},
 }
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -102,18 +104,19 @@ def app_language(params):
     lang = params.get("USAGEBOARD_LANGUAGE", "en")
     return "zh-Hans" if "zh" in lang else "en"
 
-def translate(key, lang):
-    return TRANSLATIONS.get(key, {}).get(lang, key)
+def translate(lang, key, **kwargs):
+    text = TRANSLATIONS.get(key, {}).get(lang, key)
+    return text.format(**kwargs) if kwargs else text
 
 def color_for(pct):
     if pct >= 90: return "red"
-    if pct >= 75: return "orange"
-    if pct >= 50: return "yellow"
+    if pct >= 80: return "orange"
+    if pct >= 60: return "yellow"
     return "blue"
 
 def status_for(pct):
     if pct >= 90: return "critical"
-    if pct >= 50: return "warning"
+    if pct >= 75: return "warning"
     return "normal"
 
 def to_k(tokens):
@@ -131,8 +134,10 @@ def local_today():
 def is_claude_model(model_name):
     return model_name.startswith("claude-")
 
+SCHEMA_VERSION = 1
+
 def success(items, chart=None, badge=None):
-    out = {"updatedAt": utc_now_iso(), "items": items}
+    out = {"schemaVersion": SCHEMA_VERSION, "updatedAt": utc_now_iso(), "items": items}
     if chart is not None:
         out["chart"] = chart
     if badge is not None:
@@ -140,17 +145,7 @@ def success(items, chart=None, badge=None):
     print(json.dumps(out, ensure_ascii=False))
 
 def failure(message):
-    print(json.dumps({
-        "updatedAt": utc_now_iso(),
-        "items": [{
-            "id": "claude-error",
-            "name": message,
-            "used": 0,
-            "limit": 1,
-            "displayStyle": "percent",
-            "status": "critical",
-        }],
-    }, ensure_ascii=False))
+    print(json.dumps({"error": message}, ensure_ascii=False))
 
 # ─── OAuth ────────────────────────────────────────────────────────────────────
 
@@ -186,9 +181,11 @@ def fetch_oauth_usage(token):
     )
     try:
         with urllib_request.urlopen(req, timeout=10) as resp:
-            return json.loads(resp.read())
+            return json.loads(resp.read()), None
+    except urllib_request.HTTPError as e:
+        return None, e.code
     except Exception:
-        return None
+        return None, None
 
 def build_items_from_oauth(data, lang, params, daily):
     fh = data.get("five_hour", {})
@@ -216,7 +213,7 @@ def build_items_from_oauth(data, lang, params, daily):
     items = [
         {
             "id": "claude-five-hour",
-            "name": translate("five_hour", lang),
+            "name": translate(lang, "five_hour"),
             "displayStyle": "percent",
             "used": round(min(fh_pct, 100), 1),
             "limit": 100,
@@ -226,7 +223,7 @@ def build_items_from_oauth(data, lang, params, daily):
         },
         {
             "id": "claude-seven-day",
-            "name": translate("weekly", lang),
+            "name": translate(lang, "weekly"),
             "displayStyle": "percent",
             "used": round(min(sd_pct, 100), 1),
             "limit": 100,
@@ -379,10 +376,12 @@ def maintain_cache(data_dir):
         })
         return days
 
-    # Incremental: scan from last_date+1 to today
+    # Incremental: scan from last_date+1 to today, only files modified since then
     scan_start = last_date + timedelta(days=1)
     start_dt = datetime.combine(scan_start, datetime.min.time(), tzinfo=now.astimezone().tzinfo) - timedelta(hours=14)
-    records = parse_records(all_jsonl_files(data_dir), start_dt, now)
+    cutoff_ts = start_dt.timestamp()
+    recent_files = [f for f in all_jsonl_files(data_dir) if os.path.getmtime(f) >= cutoff_ts]
+    records = parse_records(recent_files, start_dt, now)
     new_days = group_by_local_date(records)
 
     # Merge into existing cache, drop dates before cutoff
@@ -440,7 +439,7 @@ def build_chart(params, daily, lang):
 
     message = None
     if not any(b["segments"] for b in buckets):
-        message = translate("no_stats_data", lang)
+        message = translate(lang, "no_stats_data")
 
     return {"kind": "line", "period": stat_period, "bucketUnit": "day", "buckets": buckets, "message": message}
 
@@ -452,17 +451,22 @@ def main():
     data_dir = params.get("DATA_DIR", "~/.claude")
 
     if not os.path.isdir(os.path.expanduser(data_dir)):
-        failure(translate("no_data_dir", lang))
+        failure(translate(lang, "no_data_dir"))
         return
 
     token = load_oauth_token()
     if not token:
-        failure(translate("login_hint", lang))
+        failure(translate(lang, "login_hint"))
         return
 
-    oauth_data = fetch_oauth_usage(token)
+    oauth_data, http_code = fetch_oauth_usage(token)
     if not oauth_data:
-        failure(translate("api_error", lang))
+        if http_code == 401:
+            failure(translate(lang, "api_401"))
+        elif http_code and http_code >= 500:
+            failure(translate(lang, "api_5xx", code=http_code))
+        else:
+            failure(translate(lang, "api_error"))
         return
 
     daily = maintain_cache(data_dir)
