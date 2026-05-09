@@ -20,6 +20,8 @@ final class UsageBoardStore: ObservableObject {
     private let executor: PluginExecutor
     private let updateChecker: UpdateChecker
     private var refreshTasks: [UUID: Task<Void, Never>] = [:]
+    private var isSystemActive: Bool = true
+    private var systemActivityObservers: [NSObjectProtocol] = []
 
     init(
         configStore: ConfigStore = ConfigStore(),
@@ -57,6 +59,7 @@ final class UsageBoardStore: ObservableObject {
         rebuildSnapshots()
         loadCachedStates()
         startSchedulers()
+        observeSystemActivity()
     }
 
     deinit {
@@ -350,7 +353,9 @@ final class UsageBoardStore: ObservableObject {
                     }
                 }
                 while !Task.isCancelled {
-                    self?.refresh(pluginID: id)
+                    if self?.isSystemActive == true {
+                        self?.refresh(pluginID: id)
+                    }
                     try? await Task.sleep(for: .seconds(interval))
                 }
             }
@@ -365,6 +370,62 @@ final class UsageBoardStore: ObservableObject {
             if shouldRefresh {
                 refresh(pluginID: plugin.id, force: true)
             }
+        }
+    }
+
+    private func observeSystemActivity() {
+        let workspaceCenter = NSWorkspace.shared.notificationCenter
+        let distributedCenter = DistributedNotificationCenter.default()
+
+        let inactiveWorkspaceEvents: [NSNotification.Name] = [
+            NSWorkspace.willSleepNotification,
+            NSWorkspace.screensDidSleepNotification,
+            NSWorkspace.sessionDidResignActiveNotification,
+        ]
+        let activeWorkspaceEvents: [NSNotification.Name] = [
+            NSWorkspace.didWakeNotification,
+            NSWorkspace.screensDidWakeNotification,
+            NSWorkspace.sessionDidBecomeActiveNotification,
+        ]
+
+        for name in inactiveWorkspaceEvents {
+            let token = workspaceCenter.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.setSystemActive(false) }
+            }
+            systemActivityObservers.append(token)
+        }
+        for name in activeWorkspaceEvents {
+            let token = workspaceCenter.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.setSystemActive(true) }
+            }
+            systemActivityObservers.append(token)
+        }
+
+        let lockedToken = distributedCenter.addObserver(
+            forName: Notification.Name("com.apple.screenIsLocked"), object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.setSystemActive(false) }
+        }
+        let unlockedToken = distributedCenter.addObserver(
+            forName: Notification.Name("com.apple.screenIsUnlocked"), object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.setSystemActive(true) }
+        }
+        systemActivityObservers.append(lockedToken)
+        systemActivityObservers.append(unlockedToken)
+    }
+
+    private func setSystemActive(_ active: Bool) {
+        guard active != isSystemActive else { return }
+        isSystemActive = active
+        if active {
+            refreshPluginsIfDue()
+        }
+    }
+
+    private func refreshPluginsIfDue() {
+        for plugin in configuration.plugins where plugin.enabled && isPluginReadyToRun(plugin) {
+            refresh(pluginID: plugin.id)
         }
     }
 
