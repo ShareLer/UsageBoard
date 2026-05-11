@@ -77,6 +77,7 @@ CACHE_FILENAME = ".usageboard-chart-cache.json"
 TRANSLATIONS = {
     "five_hour":     {"en": "5-hour usage",                                             "zh-Hans": "5 小时用量"},
     "weekly":        {"en": "Weekly usage",                                              "zh-Hans": "周用量"},
+    "design_weekly": {"en": "Design weekly usage",                                       "zh-Hans": "Design 周用量"},
     "no_data_dir":   {"en": "~/.claude not found. Install Claude Code CLI first.",       "zh-Hans": "~/.claude 目录不存在，请先安装 Claude Code CLI"},
     "login_hint":    {"en": "Not signed in. Run claude to sign in.",                     "zh-Hans": "未找到登录凭证，请运行 claude 登录"},
     "api_error":     {"en": "API request failed. Check your network.",                   "zh-Hans": "API 请求失败，请检查网络"},
@@ -191,6 +192,7 @@ def fetch_oauth_usage(token):
 def build_items_from_oauth(data, lang, params, daily):
     fh = data.get("five_hour", {})
     sd = data.get("seven_day", {})
+    design_week = data.get("seven_day_omelette", {})
     fh_pct = float(fh.get("utilization", 0))
     sd_pct = float(sd.get("utilization", 0))
     fh_resets = fh.get("resets_at")
@@ -233,6 +235,19 @@ def build_items_from_oauth(data, lang, params, daily):
             "status": status_for(sd_pct),
         },
     ]
+
+    if isinstance(design_week, dict) and design_week:
+        design_pct = float(design_week.get("utilization", 0))
+        items.append({
+            "id": "claude-design-seven-day",
+            "name": translate(lang, "design_weekly"),
+            "displayStyle": "percent",
+            "used": round(min(design_pct, 100), 1),
+            "limit": 100,
+            "resetAt": design_week.get("resets_at"),
+            "color": color_for(design_pct),
+            "status": status_for(design_pct),
+        })
 
     return items
 

@@ -104,6 +104,39 @@ class TestFailureFormat(unittest.TestCase):
         self.assertNotIn("items", output)
 
 
+class TestBuildItemsFromOauth(unittest.TestCase):
+    """OAuth usage payload should produce UsageBoard items for each returned limit window."""
+
+    def test_includes_claude_design_weekly_usage_when_present(self):
+        payload = {
+            "five_hour": {"utilization": 12.34, "resets_at": "2026-05-09T10:00:00Z"},
+            "seven_day": {"utilization": 56.78, "resets_at": "2026-05-10T00:00:00Z"},
+            "seven_day_omelette": {"utilization": 91.2, "resets_at": "2026-05-11T00:00:00Z"},
+        }
+
+        items = plugin.build_items_from_oauth(payload, "zh-Hans", {}, {})
+        design_item = next(item for item in items if item["id"] == "claude-design-seven-day")
+
+        self.assertEqual(len(items), 3)
+        self.assertEqual(design_item["name"], "Design 周用量")
+        self.assertEqual(design_item["used"], 91.2)
+        self.assertEqual(design_item["limit"], 100)
+        self.assertEqual(design_item["displayStyle"], "percent")
+        self.assertEqual(design_item["resetAt"], "2026-05-11T00:00:00Z")
+        self.assertEqual(design_item["status"], "critical")
+        self.assertEqual(design_item["color"], "red")
+
+    def test_omits_claude_design_weekly_usage_when_absent(self):
+        payload = {
+            "five_hour": {"utilization": 12.34, "resets_at": "2026-05-09T10:00:00Z"},
+            "seven_day": {"utilization": 56.78, "resets_at": "2026-05-10T00:00:00Z"},
+        }
+
+        items = plugin.build_items_from_oauth(payload, "en", {}, {})
+
+        self.assertEqual([item["id"] for item in items], ["claude-five-hour", "claude-seven-day"])
+
+
 class TestMaintainCacheRefreshesToday(unittest.TestCase):
     """maintain_cache must re-scan today's data on subsequent runs (gap_days == 0).
 
@@ -116,7 +149,7 @@ class TestMaintainCacheRefreshesToday(unittest.TestCase):
             "type": "assistant",
             "timestamp": ts_iso,
             "message": {
-                "id": f"msg-{ts_iso}",
+                "id": f"msg-{ts_iso}-{tokens}",
                 "model": model,
                 "usage": {"input_tokens": 0, "output_tokens": tokens, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0},
             },
@@ -132,8 +165,10 @@ class TestMaintainCacheRefreshesToday(unittest.TestCase):
 
             today_str = datetime.now().strftime("%Y-%m-%d")
             now = datetime.now().astimezone()
-            earlier = now - timedelta(minutes=10)
-            later = now - timedelta(minutes=2)
+            start_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            elapsed_today = now - start_today
+            earlier = start_today + (elapsed_today / 3)
+            later = start_today + (elapsed_today * 2 / 3)
 
             # First run: today has 100 tokens
             self._write_jsonl(jsonl, earlier.isoformat(), "claude-sonnet", 100)
