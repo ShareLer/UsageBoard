@@ -159,6 +159,34 @@
 
   <p>涉及展示的插件元数据字段支持同级多语言字段，例如 <code>name@zh-Hans</code>、<code>name@en</code>、<code>description@zh-Hans</code>、<code>description@en</code>、<code>label@zh-Hans</code>、<code>label@en</code>、<code>placeholder@zh-Hans</code>、<code>placeholder@en</code>。当前语言对应字段缺失或为空时，UsageBoard 会回退到不带语言后缀的基础字段。</p>
 
+  <h3>元数据字段</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>字段</th>
+        <th>说明</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>name</code></td>
+        <td>插件名称。</td>
+      </tr>
+      <tr>
+        <td><code>icon</code></td>
+        <td>可选。图标图片 URL，显示在插件卡片标题前。图片会被内存缓存，首次加载后不再重复下载。不设置时显示默认拼图图标。</td>
+      </tr>
+      <tr>
+        <td><code>description</code></td>
+        <td>插件描述，显示在设置页插件详情中。</td>
+      </tr>
+      <tr>
+        <td><code>parameters</code></td>
+        <td>参数定义数组，每项对应设置页中的一个表单字段。</td>
+      </tr>
+    </tbody>
+  </table>
+
   <h3>参数字段</h3>
   <table>
     <thead>
@@ -178,7 +206,7 @@
       </tr>
       <tr>
         <td><code>type</code></td>
-        <td>支持 <code>string</code>、<code>secret</code>、<code>integer</code>、<code>boolean</code>、<code>choice</code>。</td>
+        <td>支持 <code>string</code>、<code>secret</code>、<code>integer</code>、<code>boolean</code>、<code>choice</code>、<code>directory</code>、<code>file</code>。</td>
       </tr>
       <tr>
         <td><code>required</code></td>
@@ -195,6 +223,10 @@
       <tr>
         <td><code>options</code></td>
         <td><code>choice</code> 类型使用，每项包含 <code>label</code> 和 <code>value</code>。</td>
+      </tr>
+      <tr>
+        <td><code>directory</code> / <code>file</code></td>
+        <td>设置界面显示路径输入框和选择器。<code>directory</code> 只能选择文件夹，<code>file</code> 只能选择文件。</td>
       </tr>
     </tbody>
   </table>

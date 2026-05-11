@@ -9,11 +9,11 @@ UsageBoard is a native macOS menu bar app that aggregates and displays usage quo
 - Resides in the menu bar; click the icon to open a quick preview.
 - Supports grouped and tabbed display modes.
 - Supports manual refresh, scheduled refresh, per-card refresh, and a quit button.
-- Scheduled refresh pauses during system sleep, display sleep, screen lock, or user switching, then resumes afterward.
+- Scheduled refresh pauses during system sleep and resumes on wake.
 - Plugin-based usage queries with per-plugin configurable refresh intervals and parameters.
 - Plugin icon support: loads remote images from metadata config and caches them.
 - Subscription level badge display (black background, white rounded label).
-- Plugin settings UI auto-generated from script metadata, including segmented controls and directory pickers.
+- Plugin settings UI auto-generated from script metadata, including segmented controls, directory pickers, and file pickers.
 - New plugins are disabled by default; required parameters are checked before enabling.
 - Plugin data cached to disk by `stateID`; last successful data shown on launch.
 - Bundled plugins are installed to the user plugin directory on first launch.
@@ -211,8 +211,9 @@ Supported parameter types:
 - `boolean`
 - `choice`
 - `directory`
+- `file`
 
-`choice` parameters render as segmented controls in Settings; `directory` parameters render as a path field with a folder picker.
+`choice` parameters render as segmented controls in Settings; `directory` parameters render as a path field with a folder picker; `file` parameters render as a path field with a file picker.
 
 Parameter reading example:
 
