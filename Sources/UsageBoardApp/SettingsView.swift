@@ -474,10 +474,12 @@ struct PluginSettingsView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(selectedPluginID == plugin.id ? Color.black.opacity(0.06) : Color.clear)
         )
+        .contentShape(Rectangle())
     }
 
     private func pluginEnabledBinding(_ plugin: PluginConfiguration) -> Binding<Bool> {
