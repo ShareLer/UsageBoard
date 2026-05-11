@@ -404,7 +404,12 @@ struct PluginSettingsView: View {
     private func saveDraft() {
         guard let draft else { return }
         guard let index = store.configuration.plugins.firstIndex(where: { $0.id == draft.id }) else { return }
-        store.configuration.plugins[index] = draft
+        store.configuration.plugins[index].name = draft.name
+        store.configuration.plugins[index].executablePath = draft.executablePath
+        store.configuration.plugins[index].refreshIntervalSeconds = draft.refreshIntervalSeconds
+        store.configuration.plugins[index].metadata = draft.metadata
+        store.configuration.plugins[index].parameterValues = draft.parameterValues
+        self.draft = store.configuration.plugins[index]
         store.saveConfiguration()
     }
 
@@ -446,6 +451,9 @@ struct PluginSettingsView: View {
             },
             set: { newValue in
                 store.setPluginEnabled(id: plugin.id, enabled: newValue)
+                if draft?.id == plugin.id {
+                    draft?.enabled = newValue
+                }
             }
         )
     }
@@ -788,6 +796,24 @@ struct PluginParameterField: View {
                     }
                 } label: {
                     Image(systemName: "folder")
+                }
+                .buttonStyle(.borderless)
+            }
+        case .file:
+            HStack(spacing: 6) {
+                TextField(parameter.localizedPlaceholder(language: language) ?? "", text: valueBinding)
+                    .textFieldStyle(.roundedBorder)
+                Button {
+                    let panel = NSOpenPanel()
+                    panel.title = parameter.localizedLabel(language: language)
+                    panel.canChooseFiles = true
+                    panel.canChooseDirectories = false
+                    panel.allowsMultipleSelection = false
+                    if panel.runModal() == .OK, let url = panel.url {
+                        valueBinding.wrappedValue = url.path
+                    }
+                } label: {
+                    Image(systemName: "doc")
                 }
                 .buttonStyle(.borderless)
             }

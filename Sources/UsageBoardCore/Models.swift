@@ -59,6 +59,7 @@ public enum PluginParameterType: String, Codable, CaseIterable, Identifiable, Se
     case boolean
     case choice
     case directory
+    case file
 
     public var id: String { rawValue }
 }
