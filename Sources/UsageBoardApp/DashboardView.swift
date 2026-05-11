@@ -2,22 +2,6 @@ import AppKit
 import SwiftUI
 import UsageBoardCore
 
-private final class IconImageCache: @unchecked Sendable {
-    static let shared = IconImageCache()
-    private let cache = NSCache<NSString, NSImage>()
-
-    func image(for url: URL) async -> NSImage? {
-        let key = url.absoluteString as NSString
-        if let cached = cache.object(forKey: key) {
-            return cached
-        }
-        guard let (data, _) = try? await URLSession.shared.data(from: url),
-              let image = NSImage(data: data) else { return nil }
-        cache.setObject(image, forKey: key)
-        return image
-    }
-}
-
 struct DashboardView: View {
     @ObservedObject var store: UsageBoardStore
     var mode: DisplayMode
@@ -42,15 +26,20 @@ struct DashboardView: View {
                 switch mode {
                 case .grouped:
                     MeasuredScrollView(maxHeight: maxHeight) {
-                        LazyVStack(spacing: 10) {
+                        VStack(spacing: 8) {
                             ForEach(enabledPlugins) { plugin in
-                                PluginGroupView(snapshot: store.snapshot(for: plugin), language: store.activeLanguage) {
+                                PluginGroupView(
+                                    snapshot: store.snapshot(for: plugin),
+                                    language: store.activeLanguage,
+                                    nextRefreshAt: store.nextRefreshAt[plugin.id]
+                                ) {
                                     store.refresh(pluginID: plugin.id, force: true)
                                 }
                             }
                         }
                         .padding(10)
                     }
+                    .background(UB.Canvas.canvasBackground)
                 case .tabs:
                     VStack(spacing: 0) {
                         ScrollViewReader { proxy in
@@ -89,7 +78,11 @@ struct DashboardView: View {
                         }
                         Divider()
                         if let plugin = selectedPlugin {
-                            PluginGroupView(snapshot: store.snapshot(for: plugin), language: store.activeLanguage) {
+                            PluginGroupView(
+                                snapshot: store.snapshot(for: plugin),
+                                language: store.activeLanguage,
+                                nextRefreshAt: store.nextRefreshAt[plugin.id]
+                            ) {
                                 store.refresh(pluginID: plugin.id, force: true)
                             }
                             .padding(10)
@@ -170,12 +163,10 @@ struct OverviewView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
-                Image(systemName: "chart.bar.xaxis")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 20, height: 20)
+                AppIconSquircle(size: 22)
                 Text("UsageBoard")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(UB.Font.popoverTitle)
+                    .tracking(-0.1)
                 Spacer()
                 Button {
                     store.refreshAll()
@@ -188,7 +179,7 @@ struct OverviewView: View {
                 SettingsButton(iconSize: 13, buttonSize: 24)
                 QuitButton(language: store.activeLanguage, iconSize: 13, buttonSize: 24)
             }
-            .padding(.horizontal)
+            .padding(.horizontal, 14)
             .padding(.vertical, 10)
 
             Divider()
@@ -215,7 +206,7 @@ struct MeasuredScrollView<Content: View>: View {
         }
         .frame(height: contentHeight > 0 ? min(max(contentHeight, minHeight), maxHeight) : minHeight)
         .onPreferenceChange(ContentHeightKey.self) { height in
-            if height > 0 {
+            if height > 0, abs(contentHeight - height) > 1 {
                 contentHeight = height
             }
         }
@@ -233,6 +224,7 @@ private struct ContentHeightKey: PreferenceKey {
 struct PluginGroupView: View {
     var snapshot: PluginSnapshot
     var language: AppLanguage
+    var nextRefreshAt: Date?
     var onRefresh: (() -> Void)?
     @State private var isChartExpanded = false
     private var strings: AppLocalization {
@@ -240,91 +232,99 @@ struct PluginGroupView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                pluginIcon
-                Text(snapshot.displayName)
-                    .font(.headline)
-                if let badge = snapshot.badge {
-                    Text(badge.uppercased())
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 1)
-                        .background(.black)
-                        .clipShape(RoundedRectangle(cornerRadius: 3))
-                }
-                Spacer()
-                stateView
-            }
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 10) {
+                header
 
-            Divider()
+                Divider()
 
-            if case .failed(let message) = snapshot.state {
-                HStack(alignment: .top, spacing: 6) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.red)
+                if case .failed(let message) = snapshot.state {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
+                            .font(.callout)
+                        Text(message)
+                            .font(.callout)
+                            .foregroundStyle(.red)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .textSelection(.enabled)
+                    }
+                    .padding(.vertical, 8)
+                } else if snapshot.items.isEmpty {
+                    Text(strings.text(.noUsageData))
                         .font(.callout)
-                    Text(message)
-                        .font(.callout)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .textSelection(.enabled)
-                }
-                .padding(.vertical, 8)
-            } else if snapshot.items.isEmpty {
-                Text(strings.text(.noUsageData))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 18)
-            } else {
-                VStack(spacing: 8) {
-                    ForEach(snapshot.items) { item in
-                        UsageItemRow(item: item, language: language)
+                        .padding(.vertical, 18)
+                } else {
+                    VStack(spacing: 8) {
+                        ForEach(snapshot.items) { item in
+                            UsageItemRow(item: item, language: language)
+                        }
                     }
                 }
             }
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+            .padding(.bottom, snapshot.chart == nil ? 10 : 0)
 
             if let chart = snapshot.chart {
-                Divider()
-                Button {
-                    isChartExpanded.toggle()
-                } label: {
-                    Image(systemName: isChartExpanded ? "chevron.down" : "chevron.up")
-                        .font(.system(size: 10, weight: .semibold))
-                        .frame(maxWidth: .infinity)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help(isChartExpanded ? strings.text(.collapseTokenStats) : strings.text(.expandTokenStats))
-
-                if isChartExpanded {
-                    TokenUsageChartView(chart: chart, language: language)
+                VStack(spacing: 0) {
+                    if isChartExpanded {
+                        TokenUsageChartView(chart: chart, language: language)
+                            .padding(.horizontal, 12)
+                            .padding(.top, 12)
+                            .padding(.bottom, 8)
+                    }
+                    Divider()
+                        .padding(.top, isChartExpanded ? 4 : 8)
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            isChartExpanded.toggle()
+                        }
+                    } label: {
+                        Image(systemName: isChartExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                            .frame(maxWidth: .infinity, minHeight: 22)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help(isChartExpanded ? strings.text(.collapseTokenStats) : strings.text(.expandTokenStats))
                 }
             }
         }
-        .padding(10)
-        .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .background(UB.Canvas.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: UB.Radius.card, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: UB.Radius.card, style: .continuous)
+                .stroke(UB.Canvas.separator.opacity(0.7), lineWidth: 0.5)
         )
+        .shadow(color: Color.black.opacity(0.02), radius: 1, y: 1)
     }
 
-    @ViewBuilder
-    private var pluginIcon: some View {
-        Group {
-            if let urlString = snapshot.iconURL, let url = URL(string: urlString) {
-                CachedIconImage(url: url)
-            } else {
-                Image(systemName: "puzzlepiece.extension")
+    private var header: some View {
+        HStack(spacing: 8) {
+            BrandTile(iconURL: snapshot.iconURL, fallbackName: snapshot.displayName, size: 22)
+            Text(snapshot.displayName)
+                .font(UB.Font.cardTitle)
+                .lineLimit(1)
+            if let badge = snapshot.badge {
+                PlanTag(text: badge)
             }
+            if case .failed = snapshot.state {
+                Text(language == .en ? "Error" : "错误")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.red)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 1)
+                    .background(Color.red.opacity(0.10))
+                    .clipShape(Capsule())
+            }
+            Spacer()
+            stateView
         }
-        .frame(width: 18, height: 18)
     }
 
     @ViewBuilder
@@ -332,29 +332,19 @@ struct PluginGroupView: View {
         switch snapshot.state {
         case .idle:
             Text(strings.text(.waitingRefresh))
+                .font(UB.Font.countdown)
                 .foregroundStyle(.secondary)
         case .loading:
             ProgressView()
                 .controlSize(.small)
-        case .ready:
-            if let updatedAt = snapshot.updatedAt {
-                Button {
-                    onRefresh?()
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 10))
-                }
-                .buttonStyle(.borderless)
-                .foregroundStyle(.secondary)
-                Text(updatedAt, style: .time)
-                    .foregroundStyle(.secondary)
-            }
-        case .failed:
+        case .ready, .failed:
+            CountdownLabel(target: nextRefreshAt)
             Button {
                 onRefresh?()
             } label: {
                 Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 10))
+                    .font(.system(size: 11))
+                    .frame(width: 20, height: 20)
             }
             .buttonStyle(.borderless)
             .foregroundStyle(.secondary)
@@ -368,24 +358,27 @@ struct UsageItemRow: View {
     var language: AppLanguage
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 12) {
             Text(item.name)
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .frame(width: 120, alignment: .leading)
+                .frame(width: 92, alignment: .leading)
 
             UsageProgressBar(value: item.progress, label: item.displayValue(), color: item.color)
                 .frame(height: 18)
                 .layoutPriority(1)
 
             Text(item.resetText(language: language))
-                .font(.caption)
+                .font(.system(size: 11))
+                .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-                .foregroundStyle(.secondary)
-                .frame(width: 80, alignment: .trailing)
+                .foregroundStyle(.tertiary)
+                .frame(width: 78, alignment: .trailing)
         }
-        .font(.callout)
+        .padding(.vertical, 2)
     }
 }
 
@@ -451,7 +444,11 @@ struct TokenUsageChartView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if chart.buckets.contains(where: { !$0.segments.isEmpty }) {
-                FlowLayout(spacing: 8, rowSpacing: 6) {
+                LazyVGrid(
+                    columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
+                    alignment: .leading,
+                    spacing: 8
+                ) {
                     Button {
                         selectedSeries = selectedSeries == strings.text(.totalTokenUsage) ? nil : strings.text(.totalTokenUsage)
                     } label: {
@@ -493,11 +490,11 @@ struct TokenUsageChartView: View {
                             maxValue: max(visibleSeries.flatMap(\.values).max() ?? 0, 1),
                             visibleWidth: viewport.size.width
                         )
-                        .frame(width: resolvedWidth, height: 190)
+                        .frame(width: resolvedWidth, height: 170)
                     }
                     .coordinateSpace(name: "TokenChartScroll")
                 }
-                .frame(height: 190)
+                .frame(height: 170)
             } else {
                 Text(chart.message ?? strings.text(.noStatsData))
                     .font(.caption)
@@ -563,40 +560,36 @@ struct TokenMetricView: View {
     var isSelected: Bool = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 5) {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
                 Circle()
                     .fill(color)
                     .frame(width: 7, height: 7)
                 Text(title)
-                    .font(.caption)
+                    .font(.system(size: 11.5))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(formattedTokenNumber(value).number)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(UB.Font.summaryBig)
+                    .tracking(-0.6)
                     .foregroundStyle(.primary)
-                    .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                 Text(formattedTokenNumber(value).unit)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.tertiary)
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .frame(width: 150, height: 58, alignment: .leading)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(RoundedRectangle(cornerRadius: 6))
         .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected ? Color.blue.opacity(0.12) : Color.clear)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(isSelected ? Color.blue.opacity(0.32) : Color.clear, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(isSelected ? color.opacity(0.10) : .clear)
         )
     }
 }
@@ -688,6 +681,20 @@ struct TokenLineChartPlot: View {
         ZStack {
             ForEach(series) { item in
                 Path { path in
+                    guard !item.values.isEmpty else { return }
+                    path.move(to: CGPoint(x: xPosition(for: 0, in: plotRect), y: plotRect.maxY))
+                    for index in item.values.indices {
+                        path.addLine(to: CGPoint(
+                            x: xPosition(for: index, in: plotRect),
+                            y: yPosition(for: item.values[index], in: plotRect)
+                        ))
+                    }
+                    path.addLine(to: CGPoint(x: xPosition(for: item.values.count - 1, in: plotRect), y: plotRect.maxY))
+                    path.closeSubpath()
+                }
+                .fill(item.color.opacity(0.06))
+
+                Path { path in
                     for index in item.values.indices {
                         let point = CGPoint(
                             x: xPosition(for: index, in: plotRect),
@@ -700,7 +707,7 @@ struct TokenLineChartPlot: View {
                         }
                     }
                 }
-                .stroke(item.color, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                .stroke(item.color, style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
             }
         }
     }
@@ -887,40 +894,46 @@ struct UsageProgressBar: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let width = max(0, min(value, 1)) * proxy.size.width
+            let ratio = max(0, min(value, 1))
+            let width = ratio * proxy.size.width
+            let textWhite = ratio >= 0.55
             ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 5)
-                    .fill(progressColor.opacity(0.16))
-                RoundedRectangle(cornerRadius: 5)
-                    .fill(progressColor)
+                RoundedRectangle(cornerRadius: UB.Radius.bar, style: .continuous)
+                    .fill(resolvedColor.opacity(0.16))
+                RoundedRectangle(cornerRadius: UB.Radius.bar, style: .continuous)
+                    .fill(resolvedColor)
                     .frame(width: width)
                 Text(label)
-                    .font(.caption)
-                    .fontWeight(.semibold)
+                    .font(.system(size: 11, weight: .semibold))
                     .monospacedDigit()
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(textWhite ? Color.white : Color.primary)
                     .frame(maxWidth: .infinity, alignment: .center)
             }
         }
-        .frame(minWidth: 80)
-        .clipShape(RoundedRectangle(cornerRadius: 5))
+        .frame(minWidth: 80, idealHeight: 18, maxHeight: 18)
+        .clipShape(RoundedRectangle(cornerRadius: UB.Radius.bar, style: .continuous))
         .accessibilityLabel(label)
     }
 
-    private var progressColor: Color {
-        switch color?.lowercased() {
-        case "red":
-            return .red
-        case "orange":
-            return .orange
-        case "yellow":
-            return .yellow
-        case "green":
-            return .green
-        case "blue", nil:
-            return .blue
-        default:
-            return .blue
+    private var resolvedColor: Color {
+        if let override = color?.lowercased(), let c = mapOverride(override) {
+            return c
+        }
+        let pct = value * 100
+        if pct >= 100 { return .red }
+        if pct >= 80 { return .orange }
+        if pct >= 60 { return .yellow }
+        return .blue
+    }
+
+    private func mapOverride(_ name: String) -> Color? {
+        switch name {
+        case "red": return .red
+        case "orange": return .orange
+        case "yellow": return .yellow
+        case "green": return .green
+        case "blue": return .blue
+        default: return nil
         }
     }
 }
@@ -959,25 +972,5 @@ private struct QuitButton: View {
         }
         .buttonStyle(.borderless)
         .help(strings.text(.quitUsageBoard))
-    }
-}
-
-private struct CachedIconImage: View {
-    let url: URL
-    @State private var image: NSImage?
-
-    var body: some View {
-        Group {
-            if let image {
-                Image(nsImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-            } else {
-                Image(systemName: "puzzlepiece.extension")
-            }
-        }
-        .task(id: url) {
-            image = await IconImageCache.shared.image(for: url)
-        }
     }
 }
