@@ -11,6 +11,16 @@
 #   "description@en": "Query OpenAI Codex CLI usage and stats",
 #   "parameters": [
 #     {
+#       "name": "AUTH_FILE",
+#       "label": "认证文件",
+#       "label@zh-Hans": "认证文件",
+#       "label@en": "Auth File",
+#       "type": "file",
+#       "required": false,
+#       "defaultValue": "~/.codex/auth.json",
+#       "placeholder": "~/.codex/auth.json"
+#     },
+#     {
 #       "name": "DATA_DIR",
 #       "label": "数据目录",
 #       "label@zh-Hans": "数据目录",
@@ -19,6 +29,15 @@
 #       "required": false,
 #       "defaultValue": "~/.codex",
 #       "placeholder": "~/.codex"
+#     },
+#     {
+#       "name": "ENABLE_STATS",
+#       "label": "统计",
+#       "label@zh-Hans": "统计",
+#       "label@en": "Statistics",
+#       "type": "boolean",
+#       "required": false,
+#       "defaultValue": "true"
 #     },
 #     {
 #       "name": "STAT_PERIOD",
@@ -106,15 +125,28 @@ def translate(language: str, key: str, **kwargs) -> str:
     return text.format(**kwargs) if kwargs else text
 
 
-def load_auth(data_dir: str) -> dict[str, Any] | None:
-    auth_path = os.path.join(os.path.expanduser(data_dir), "auth.json")
-    if not os.path.isfile(auth_path):
+def load_auth(auth_path: str) -> dict[str, Any] | None:
+    expanded = os.path.expanduser(auth_path)
+    if not os.path.isfile(expanded):
         return None
     try:
-        with open(auth_path, encoding="utf-8") as f:
+        with open(expanded, encoding="utf-8") as f:
             return json.load(f)
     except (OSError, json.JSONDecodeError):
         return None
+
+
+def extract_auth_credentials(auth: dict[str, Any]) -> tuple[str | None, str | None]:
+    tokens = auth.get("tokens") if isinstance(auth.get("tokens"), dict) else {}
+    access_token = tokens.get("access_token") or auth.get("access_token")
+    account_id = tokens.get("account_id") or auth.get("account_id")
+
+    if not isinstance(access_token, str) or not access_token.strip():
+        access_token = None
+    if not isinstance(account_id, str) or not account_id.strip():
+        account_id = None
+
+    return access_token, account_id
 
 
 def fetch_usage(access_token: str, account_id: str) -> dict[str, Any]:
@@ -523,19 +555,18 @@ def failure(message: str, language: str) -> int:
 def main() -> int:
     params = parse_usageboard_params(sys.argv[1:])
     language = app_language(params)
+    auth_file = params.get("AUTH_FILE", "") or "~/.codex/auth.json"
     data_dir = params.get("DATA_DIR", "") or "~/.codex"
+    enable_stats = params.get("ENABLE_STATS", "true").lower() != "false"
     period = params.get("STAT_PERIOD", "7d").lower()
     if period not in ("7d", "15d", "30d"):
         period = "7d"
 
-    auth = load_auth(data_dir)
+    auth = load_auth(auth_file)
     if not auth:
-        path = os.path.join(os.path.expanduser(data_dir), "auth.json")
-        return failure(translate(language, "auth_file_not_found", path=path), language)
+        return failure(translate(language, "auth_file_not_found", path=os.path.expanduser(auth_file)), language)
 
-    tokens = auth.get("tokens") if isinstance(auth.get("tokens"), dict) else {}
-    access_token = tokens.get("access_token")
-    account_id = tokens.get("account_id")
+    access_token, account_id = extract_auth_credentials(auth)
     if not access_token or not account_id:
         return failure(translate(language, "auth_token_missing"), language)
 
@@ -560,12 +591,14 @@ def main() -> int:
     except Exception:
         return failure(translate(language, "network_error"), language)
 
-    try:
-        daily = maintain_chart_cache(data_dir, language)
-        chart = build_chart_from_cache(daily, period, language)
-    except Exception:
-        _, _, buckets, bucket_unit = stat_range(period)
-        chart = chart_message(translate(language, "stats_parse_failed"), period, buckets, bucket_unit)
+    chart = None
+    if enable_stats:
+        try:
+            daily = maintain_chart_cache(data_dir, language)
+            chart = build_chart_from_cache(daily, period, language)
+        except Exception:
+            _, _, buckets, bucket_unit = stat_range(period)
+            chart = chart_message(translate(language, "stats_parse_failed"), period, buckets, bucket_unit)
 
     if not items:
         return failure(translate(language, "no_quota_data"), language)
