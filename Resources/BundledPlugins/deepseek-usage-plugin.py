@@ -58,7 +58,7 @@ def color_for_balance(balance: float, limit: float) -> str | None:
         return "orange"
     if ratio <= 0.40:
         return "yellow"
-    return None
+    return "blue"
 
 
 def parse_limit(raw: str) -> float:
