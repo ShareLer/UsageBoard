@@ -56,6 +56,31 @@ final class UsageBoardTests: XCTestCase {
         XCTAssertEqual(try String(contentsOf: destination.appendingPathComponent("tavily-usage-plugin.py")), "new")
     }
 
+    func testBundledPluginInstallerReplacesBrokenSymlink() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("usageboard-\(UUID().uuidString)", isDirectory: true)
+        let source = root.appendingPathComponent("source", isDirectory: true)
+        let destination = root.appendingPathComponent("plugins", isDirectory: true)
+        try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+
+        let bundled = source.appendingPathComponent("glm-usage-plugin.py")
+        let existing = destination.appendingPathComponent("glm-usage-plugin.py")
+        let staleTarget = root.appendingPathComponent("missing/UsageBoard.app/Contents/Resources/Plugins/glm-usage-plugin.py")
+        try "bundled".data(using: .utf8)!.write(to: bundled)
+        try FileManager.default.createSymbolicLink(at: existing, withDestinationURL: staleTarget)
+
+        let installed = try BundledPluginInstaller(
+            sourceDirectoryURL: source,
+            destinationDirectoryURL: destination
+        )
+        .installIfNeeded()
+
+        XCTAssertEqual(installed.map(\.lastPathComponent), ["glm-usage-plugin.py"])
+        let linkTarget = try FileManager.default.destinationOfSymbolicLink(atPath: existing.path)
+        XCTAssertEqual(URL(fileURLWithPath: linkTarget).resolvingSymlinksInPath(), bundled.resolvingSymlinksInPath())
+    }
+
     func testPluginOutputDecodesAndFormatsUsage() throws {
         let json = """
         {
