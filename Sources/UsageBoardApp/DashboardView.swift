@@ -271,27 +271,30 @@ struct PluginGroupView: View {
 
             if let chart = snapshot.chart {
                 VStack(spacing: 0) {
-                    if isChartExpanded {
-                        TokenUsageChartView(chart: chart, language: language)
-                            .padding(.horizontal, 12)
-                            .padding(.top, 12)
-                            .padding(.bottom, 8)
-                    }
-                    Divider()
-                        .padding(.top, isChartExpanded ? 4 : 8)
                     Button {
                         withAnimation(.easeInOut(duration: 0.25)) {
                             isChartExpanded.toggle()
                         }
                     } label: {
-                        Image(systemName: isChartExpanded ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.tertiary)
-                            .frame(maxWidth: .infinity, minHeight: 22)
-                            .contentShape(Rectangle())
+                        VStack(spacing: 0) {
+                            Divider()
+                                .padding(.top, 8)
+                            Image(systemName: isChartExpanded ? "chevron.up" : "chevron.down")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(.tertiary)
+                                .frame(maxWidth: .infinity, minHeight: 22)
+                        }
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .help(isChartExpanded ? strings.text(.collapseTokenStats) : strings.text(.expandTokenStats))
+
+                    if isChartExpanded {
+                        TokenUsageChartView(chart: chart, language: language)
+                            .padding(.horizontal, 12)
+                            .padding(.top, 8)
+                            .padding(.bottom, 8)
+                    }
                 }
             }
         }
