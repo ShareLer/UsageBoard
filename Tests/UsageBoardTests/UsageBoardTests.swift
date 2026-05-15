@@ -382,6 +382,57 @@ final class UsageBoardTests: XCTestCase {
         XCTAssertTrue(message.contains("JSON 解析失败"))
     }
 
+    func testPluginExecutorReportsDecodingPath() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("usageboard-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let script = dir.appendingPathComponent("bad-output.py")
+        try """
+        print('{"updatedAt":"2026-05-15T00:00:00Z","items":[{"id":"a","name":"A","used":1,"limit":2,"displayStyle":"ratio","status":"ok"}]}')
+        """.write(to: script, atomically: true, encoding: .utf8)
+
+        let configuration = PluginConfiguration(name: "Bad", executablePath: script.path)
+        let snapshot = PluginExecutor(timeoutSeconds: 2).run(configuration: configuration, displayName: "Bad")
+
+        guard case .failed(let message) = snapshot.state else {
+            XCTFail("Expected failed snapshot")
+            return
+        }
+        XCTAssertTrue(message.contains("JSON 解析失败"))
+        XCTAssertTrue(message.contains("items.Index 0.status"), message)
+        XCTAssertTrue(message.contains("invalid String value ok"), message)
+    }
+
+    func testPluginExecutorForcesPythonUTF8Environment() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("usageboard-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let script = dir.appendingPathComponent("encoding.py")
+        try """
+        import json, os, sys
+        badge = "|".join([
+            os.environ.get("PYTHONIOENCODING", ""),
+            os.environ.get("LANG", ""),
+            os.environ.get("LC_ALL", ""),
+            sys.stdout.encoding or "",
+        ])
+        print(json.dumps({
+            "updatedAt": "2026-05-15T00:00:00Z",
+            "items": [{"id": "a", "name": "A", "used": 1, "limit": 2, "displayStyle": "ratio", "status": "normal"}],
+            "badge": badge,
+        }))
+        """.write(to: script, atomically: true, encoding: .utf8)
+
+        let configuration = PluginConfiguration(name: "Encoding", executablePath: script.path)
+        let snapshot = PluginExecutor(timeoutSeconds: 2).run(configuration: configuration, displayName: "Encoding")
+
+        guard case .ready = snapshot.state else {
+            XCTFail("Expected ready snapshot, got \(snapshot.state)")
+            return
+        }
+        XCTAssertEqual(snapshot.badge, "utf-8|en_US.UTF-8|en_US.UTF-8|utf-8")
+    }
+
     func testPluginExecutorHandlesLargeStdout() throws {
         // Regression test for pipe-buffer deadlock: stdout > 16KB used to hang
         // until 15s timeout because pipe was only drained after wait().

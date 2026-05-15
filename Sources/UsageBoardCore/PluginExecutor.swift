@@ -34,6 +34,7 @@ public struct PluginExecutor: Sendable {
         }
 
         let process = Process()
+        process.environment = pluginEnvironment()
         let executableURL = URL(fileURLWithPath: configuration.executablePath)
         let pluginArguments = pluginParameterArguments(configuration: configuration, language: language)
         if executableURL.pathExtension.lowercased() == "py" {
@@ -124,7 +125,7 @@ public struct PluginExecutor: Sendable {
                !errorOutput.error.isEmpty {
                 return failed(configuration: configuration, displayName: displayName, message: errorOutput.error)
             }
-            return failed(configuration: configuration, displayName: displayName, message: "\(text(.jsonParseFailed, language: language))\(error.localizedDescription)")
+            return failed(configuration: configuration, displayName: displayName, message: "\(text(.jsonParseFailed, language: language))\(decodeErrorDescription(error))")
         }
     }
 
@@ -138,6 +139,14 @@ public struct PluginExecutor: Sendable {
             .filter { !$0.value.isEmpty }
             .sorted { $0.key < $1.key }
             .flatMap { ["--usageboard-param", "\($0.key)=\($0.value)"] }
+    }
+
+    private func pluginEnvironment() -> [String: String] {
+        ProcessInfo.processInfo.environment.merging([
+            "PYTHONIOENCODING": "utf-8",
+            "LANG": "en_US.UTF-8",
+            "LC_ALL": "en_US.UTF-8",
+        ]) { _, new in new }
     }
 
     private func failed(configuration: PluginConfiguration, displayName: String, message: String) -> PluginSnapshot {
@@ -154,6 +163,28 @@ public struct PluginExecutor: Sendable {
 
     private struct PluginOutputError: Decodable {
         let error: String
+    }
+
+    private func decodeErrorDescription(_ error: Error) -> String {
+        switch error {
+        case DecodingError.dataCorrupted(let context):
+            return formatDecodingError(context: context, fallback: error.localizedDescription)
+        case DecodingError.keyNotFound(let key, let context):
+            return formatDecodingError(context: context, fallback: "Missing key '\(key.stringValue)'")
+        case DecodingError.typeMismatch(_, let context):
+            return formatDecodingError(context: context, fallback: context.debugDescription)
+        case DecodingError.valueNotFound(_, let context):
+            return formatDecodingError(context: context, fallback: context.debugDescription)
+        default:
+            return error.localizedDescription
+        }
+    }
+
+    private func formatDecodingError(context: DecodingError.Context, fallback: String) -> String {
+        let path = context.codingPath.map(\.stringValue).joined(separator: ".")
+        let detail = context.debugDescription.isEmpty ? fallback : context.debugDescription
+        guard !path.isEmpty else { return detail }
+        return "\(path): \(detail)"
     }
 
     private enum Message {
