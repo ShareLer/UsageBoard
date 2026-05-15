@@ -131,6 +131,7 @@ TRANSLATIONS = {
     "no_quota_items":   {"zh-Hans": "未获取到配额数据",                     "en": "No quota data found."},
     "request_timeout":  {"zh-Hans": "请求超时，请检查网络",                  "en": "Request timed out. Check your network."},
     "http_401":         {"zh-Hans": "API Key 无效，请检查配置",             "en": "Invalid API Key. Check your settings."},
+    "invalid_api_key":  {"zh-Hans": "API Key 无效，请检查配置",             "en": "Invalid API Key. Check your settings."},
     "http_403":         {"zh-Hans": "账号无权限访问",                        "en": "Access denied. Check your plan."},
     "http_429":         {"zh-Hans": "请求频率超限，请稍后重试",               "en": "Rate limited. Try again later."},
     "http_5xx":         {"zh-Hans": "服务暂时不可用 (HTTP {code})",         "en": "Service unavailable (HTTP {code})"},
@@ -373,7 +374,14 @@ def main() -> int:
         return failure(translate(language, "missing_api_key"), language)
 
     try:
-        items, badge = build_items(fetch_remains(api_key), language)
+        payload = fetch_remains(api_key)
+        status_code = payload.get("base_resp", {}).get("status_code", 0)
+        if status_code != 0:
+            if status_code == 2049:
+                return failure(translate(language, "invalid_api_key"), language)
+            status_msg = payload.get("base_resp", {}).get("status_msg", "")
+            return failure(f"{status_msg} ({status_code})" if status_msg else str(status_code), language)
+        items, badge = build_items(payload, language)
         if not items:
             return failure(translate(language, "no_quota_items"), language)
         return success(items, badge=badge)
