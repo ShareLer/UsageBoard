@@ -7,7 +7,7 @@ DIST_DIR="$PROJECT_DIR/dist"
 APP_BUNDLE="$DIST_DIR/UsageBoard.app"
 PLIST="$APP_BUNDLE/Contents/Info.plist"
 REMOTE_HOST="root@may"
-REMOTE_PATH="/data/web/blog/usageboard"
+REMOTE_PATH="/data/web/usageboard"
 DOWNLOAD_BASE_URL="https://may.ltd/usageboard"
 UPDATE_CHECK_URL="${DOWNLOAD_BASE_URL}/version.json"
 
