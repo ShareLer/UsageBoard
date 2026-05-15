@@ -111,6 +111,31 @@ final class UsageBoardTests: XCTestCase {
         XCTAssertNotEqual(text, "--")
     }
 
+    func testPluginOutputDecodesFractionalSecondDates() throws {
+        let json = """
+        {
+          "schemaVersion": 1,
+          "updatedAt": "2026-05-15T04:22:02Z",
+          "items": [
+            {
+              "id": "minimax-minimax-m*-interval",
+              "name": "文本（5小时）",
+              "used": 0,
+              "limit": 1500,
+              "displayStyle": "ratio",
+              "resetAt": "2026-05-15T06:59:59.669000Z",
+              "status": "normal"
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let output = try UsageBoardJSON.decoder().decode(PluginOutput.self, from: json)
+        let item = try XCTUnwrap(output.items.first)
+        XCTAssertEqual(item.name, "文本（5小时）")
+        XCTAssertNotNil(item.resetAt)
+    }
+
     func testPluginOutputDecodesChartAndCachesIt() throws {
         let json = """
         {
