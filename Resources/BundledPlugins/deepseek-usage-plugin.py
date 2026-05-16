@@ -41,6 +41,7 @@ import os
 import sys
 import urllib.error
 import urllib.request
+from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 from _common import (  # noqa: E402
@@ -79,7 +80,7 @@ def parse_limit(raw: str) -> float:
     return value if value > 0 else DEFAULT_LIMIT
 
 
-def fetch_balance(api_key: str, language: str, limit_amount: float, translate: Any) -> list[dict]:
+def fetch_balance(api_key: str) -> dict[str, Any]:
     request = urllib.request.Request(
         ENDPOINT,
         headers={
@@ -91,11 +92,10 @@ def fetch_balance(api_key: str, language: str, limit_amount: float, translate: A
         if response.status != 200:
             raise ValueError(f"Unexpected HTTP {response.status}")
         body = response.read()
-        try:
-            data = json.loads(body)
-        except (json.JSONDecodeError, ValueError):
-            raise ValueError("Invalid JSON response from DeepSeek API")
+        return json.loads(body)
 
+
+def build_items(data: dict[str, Any], language: str, limit_amount: float, translate: Any) -> list[dict[str, Any]]:
     items: list[dict] = []
     for info in data.get("balance_infos", []):
         currency = info.get("currency", "CNY")
@@ -127,15 +127,22 @@ def main() -> int:
     limit_amount = parse_limit(params.get("LIMIT", ""))
 
     try:
-        items = fetch_balance(api_key, language, limit_amount, translate)
+        payload = fetch_balance(api_key)
     except urllib.error.HTTPError as error:
         return handle_http_error(error, translate, language)
     except urllib.error.URLError as error:
         return handle_url_error(error, translate, language)
     except TimeoutError:
         return failure(translate(language, "request_timeout"))
+    except json.JSONDecodeError:
+        return failure(translate(language, "usage_parse_failed"))
     except Exception:
         return failure(translate(language, "network_error"))
+
+    try:
+        items = build_items(payload, language, limit_amount, translate)
+    except Exception:
+        return failure(translate(language, "usage_parse_failed"))
 
     return success(items)
 

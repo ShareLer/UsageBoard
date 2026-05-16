@@ -96,9 +96,11 @@ TRANSLATIONS = {
     "auth_token_missing":   {"zh-Hans": "认证信息不完整，请重新登录 Codex",               "en": "Incomplete auth. Sign in to Codex again."},
     "token_expired":        {"zh-Hans": "登录已过期，请重新运行 codex auth",              "en": "Session expired. Run codex auth again."},
     "unauthorized":         {"zh-Hans": "账号无权限访问",                                "en": "Access denied. Check your plan."},
+    "usage_parse_failed":   {"zh-Hans": "用量数据解析失败",                               "en": "Failed to parse usage data"},
     "stats_parse_failed":   {"zh-Hans": "统计数据解析失败",                               "en": "Failed to parse stats data"},
     "no_quota_data":        {"zh-Hans": "未获取到配额数据，账号可能不支持此 API",          "en": "No quota data. Account may not support this API."},
 }
+translate = make_translator(TRANSLATIONS)
 
 
 def load_auth(auth_path: str) -> dict[str, Any] | None:
@@ -506,7 +508,6 @@ def build_items(payload: dict[str, Any], language: str) -> tuple[list[dict[str, 
 def main() -> int:
     params = parse_usageboard_params(sys.argv[1:])
     language = app_language(params)
-    translate = make_translator(TRANSLATIONS)
     auth_file = params.get("AUTH_FILE", "") or "~/.codex/auth.json"
     data_dir = os.path.realpath(os.path.expanduser(params.get("DATA_DIR", "") or "~/.codex"))
     enable_stats = params.get("ENABLE_STATS", "true").lower() != "false"
@@ -525,7 +526,7 @@ def main() -> int:
     items: list[dict[str, Any]] = []
     badge: str | None = None
     try:
-        items, badge = build_items(fetch_usage(access_token, account_id), language)
+        payload = fetch_usage(access_token, account_id)
     except urllib.error.HTTPError as error:
         if error.code == 401:
             return failure(translate(language, "token_expired"))
@@ -536,8 +537,15 @@ def main() -> int:
         return handle_url_error(error, translate, language)
     except TimeoutError:
         return failure(translate(language, "request_timeout"))
+    except json.JSONDecodeError:
+        return failure(translate(language, "usage_parse_failed"))
     except Exception:
         return failure(translate(language, "network_error"))
+
+    try:
+        items, badge = build_items(payload, language)
+    except Exception:
+        return failure(translate(language, "usage_parse_failed"))
 
     chart = None
     if enable_stats:

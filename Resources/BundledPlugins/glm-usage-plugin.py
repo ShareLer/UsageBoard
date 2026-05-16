@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import json
 import os
+import hashlib
 import sys
 import urllib.error
 import urllib.parse
@@ -64,6 +65,9 @@ from _common import (  # noqa: E402
 
 QUOTA_ENDPOINT = "https://open.bigmodel.cn/api/monitor/usage/quota/limit"
 MODEL_USAGE_ENDPOINT = "https://bigmodel.cn/api/monitor/usage/model-usage"
+CACHE_VERSION = 1
+CACHE_FILENAME_PREFIX = "glm-usage-chart-cache"
+DEFAULT_CACHE_DIR = "~/Library/Application Support/UsageBoard/plugin-caches"
 
 TRANSLATIONS = {
     "period_5h":       {"zh-Hans": "5小时",     "en": "5 hours"},
@@ -120,10 +124,17 @@ def stat_range(period: str) -> tuple[datetime, datetime, list[datetime], str]:
     day_count = {"7d": 7, "15d": 15, "30d": 30}.get(period, 7)
     today = now.date()
     start_date = today - timedelta(days=day_count - 1)
-    start = datetime.combine(start_date, time.min, tzinfo=now.tzinfo)
-    end = datetime.combine(today, time.max, tzinfo=now.tzinfo).replace(microsecond=0)
-    buckets = [start + timedelta(days=index) for index in range(day_count)]
+    start, end, buckets = day_window(start_date, today)
     return start, end, buckets, "day"
+
+
+def day_window(start_date, end_date) -> tuple[datetime, datetime, list[datetime]]:
+    now = datetime.now().astimezone()
+    start = datetime.combine(start_date, time.min, tzinfo=now.tzinfo)
+    end = datetime.combine(end_date, time.max, tzinfo=now.tzinfo).replace(microsecond=0)
+    day_count = (end_date - start_date).days + 1
+    buckets = [start + timedelta(days=index) for index in range(day_count)]
+    return start, end, buckets
 
 
 def reset_at_iso(limit: dict[str, Any]) -> str | None:
@@ -655,24 +666,32 @@ def main() -> int:
 
     try:
         payload = fetch_limits(api_key)
-        items, badge = build_items(payload, language)
-        if not items:
-            return failure(translate(language, "no_quota_items"))
-        start_time, end_time, buckets, bucket_unit = stat_range(period)
-        try:
-            chart_payload = fetch_model_usage(api_key, start_time, end_time)
-            chart = build_chart(chart_payload, period, buckets, bucket_unit, language)
-        except Exception:
-            chart = chart_message(translate(language, "stats_query_failed"), period, buckets, bucket_unit)
-        return success(items, badge=badge, chart=chart)
     except urllib.error.HTTPError as error:
         return handle_http_error(error, translate, language)
     except urllib.error.URLError as error:
         return handle_url_error(error, translate, language)
     except TimeoutError:
         return failure(translate(language, "request_timeout"))
+    except json.JSONDecodeError:
+        return failure(translate(language, "usage_parse_failed"))
     except Exception:
         return failure(translate(language, "network_error"))
+
+    try:
+        items, badge = build_items(payload, language)
+    except Exception:
+        return failure(translate(language, "usage_parse_failed"))
+
+    if not items:
+        return failure(translate(language, "no_quota_items"))
+
+    start_time, end_time, buckets, bucket_unit = stat_range(period)
+    try:
+        chart_payload = fetch_model_usage(api_key, start_time, end_time)
+        chart = build_chart(chart_payload, period, buckets, bucket_unit, language)
+    except Exception:
+        chart = chart_message(translate(language, "stats_query_failed"), period, buckets, bucket_unit)
+    return success(items, badge=badge, chart=chart)
 
 
 if __name__ == "__main__":

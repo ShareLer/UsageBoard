@@ -49,6 +49,7 @@ COMMON_TRANSLATIONS: dict[str, dict[str, str]] = {
     "http_5xx":         {"zh-Hans": "服务暂时不可用 (HTTP {code})",         "en": "Service unavailable (HTTP {code})"},
     "http_other":       {"zh-Hans": "请求失败 (HTTP {code})",              "en": "Request failed (HTTP {code})"},
     "network_error":    {"zh-Hans": "网络连接失败，请检查网络",               "en": "Network error. Check your connection."},
+    "usage_parse_failed": {"zh-Hans": "用量数据解析失败",                    "en": "Failed to parse usage data"},
     "ssl_error":        {"zh-Hans": "SSL 证书验证失败，请检查网络环境",       "en": "SSL certificate error. Check your network."},
     "connection_error":  {"zh-Hans": "无法连接服务器，请检查网络",             "en": "Cannot reach server. Check your connection."},
 }

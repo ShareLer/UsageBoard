@@ -258,6 +258,18 @@ def main() -> int:
 
     try:
         payload = fetch_remains(api_key)
+    except urllib.error.HTTPError as error:
+        return handle_http_error(error, translate, language)
+    except urllib.error.URLError as error:
+        return handle_url_error(error, translate, language)
+    except TimeoutError:
+        return failure(translate(language, "request_timeout"))
+    except json.JSONDecodeError:
+        return failure(translate(language, "usage_parse_failed"))
+    except Exception:
+        return failure(translate(language, "network_error"))
+
+    try:
         status_code = payload.get("base_resp", {}).get("status_code", 0)
         if status_code != 0:
             if status_code == 2049:
@@ -265,17 +277,12 @@ def main() -> int:
             status_msg = payload.get("base_resp", {}).get("status_msg", "")
             return failure(f"{status_msg} ({status_code})" if status_msg else str(status_code))
         items, badge = build_items(payload, language, translate)
-        if not items:
-            return failure(translate(language, "no_quota_items"))
-        return success(items, badge=badge)
-    except urllib.error.HTTPError as error:
-        return handle_http_error(error, translate, language)
-    except urllib.error.URLError as error:
-        return handle_url_error(error, translate, language)
-    except TimeoutError:
-        return failure(translate(language, "request_timeout"))
     except Exception:
-        return failure(translate(language, "network_error"))
+        return failure(translate(language, "usage_parse_failed"))
+
+    if not items:
+        return failure(translate(language, "no_quota_items"))
+    return success(items, badge=badge)
 
 
 if __name__ == "__main__":

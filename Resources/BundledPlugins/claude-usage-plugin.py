@@ -84,6 +84,7 @@ from _common import (  # noqa: E402
 PLAN_5H = {"pro": 44_000, "max5": 88_000, "max20": 220_000}
 CACHE_VERSION = 2
 CACHE_FILENAME = ".usageboard-chart-cache.json"
+PARSE_ERROR = "parse_error"
 
 def status_for(pct):
     if pct >= 90: return "critical"
@@ -154,6 +155,8 @@ def fetch_oauth_usage(token):
             return json.loads(resp.read()), None
     except urllib_request.HTTPError as e:
         return None, e.code
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return None, PARSE_ERROR
     except Exception:
         return None, None
 
@@ -432,15 +435,21 @@ def main():
     if not oauth_data:
         if http_code == 401:
             failure(translate(lang, "api_401"))
-        elif http_code and http_code >= 500:
+        elif http_code == PARSE_ERROR:
+            failure(translate(lang, "usage_parse_failed"))
+        elif isinstance(http_code, int) and http_code >= 500:
             failure(translate(lang, "api_5xx", code=http_code))
         else:
             failure(translate(lang, "api_error"))
         return
 
     daily = maintain_cache(data_dir)
-    items = build_items_from_oauth(oauth_data, lang, params, daily, translate)
-    badge = str(oauth_data.get("plan_type", params.get("PLAN", "pro"))).capitalize()
+    try:
+        items = build_items_from_oauth(oauth_data, lang, params, daily, translate)
+        badge = str(oauth_data.get("plan_type", params.get("PLAN", "pro"))).capitalize()
+    except Exception:
+        failure(translate(lang, "usage_parse_failed"))
+        return
     chart = build_chart(params, daily, lang, translate)
 
     success(items, chart=chart, badge=badge)

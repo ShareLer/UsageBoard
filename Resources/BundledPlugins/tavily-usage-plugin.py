@@ -135,10 +135,7 @@ def main() -> int:
         return failure(translate(language, "missing_api_key"))
 
     try:
-        items = build_items(fetch_usage(api_key), language, translate)
-        if not items:
-            return failure(translate(language, "no_quota_items"))
-        return success(items)
+        payload = fetch_usage(api_key)
     except urllib.error.HTTPError as error:
         return handle_http_error(error, translate, language)
     except urllib.error.URLError as error:
@@ -146,9 +143,18 @@ def main() -> int:
     except TimeoutError:
         return failure(translate(language, "request_timeout"))
     except json.JSONDecodeError:
-        return failure(translate(language, "network_error"))
+        return failure(translate(language, "usage_parse_failed"))
     except Exception:
         return failure(translate(language, "network_error"))
+
+    try:
+        items = build_items(payload, language, translate)
+    except Exception:
+        return failure(translate(language, "usage_parse_failed"))
+
+    if not items:
+        return failure(translate(language, "no_quota_items"))
+    return success(items)
 
 
 if __name__ == "__main__":
