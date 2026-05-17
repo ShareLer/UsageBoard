@@ -413,7 +413,7 @@ struct UsageItemRow: View {
     var language: AppLanguage
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 3) {
             Text(item.name)
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
@@ -1072,7 +1072,7 @@ struct UsageProgressBar: View {
                     .frame(maxWidth: .infinity, alignment: .center)
             }
         }
-        .frame(minWidth: 60, idealHeight: 18, maxHeight: 18)
+        .frame(idealHeight: 18, maxHeight: 18)
         .clipShape(RoundedRectangle(cornerRadius: UB.Radius.bar, style: .continuous))
         .accessibilityLabel(label)
     }

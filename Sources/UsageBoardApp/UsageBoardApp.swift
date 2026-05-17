@@ -40,14 +40,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
             return
         }
         let newPopover = NSPopover()
-        newPopover.contentSize = NSSize(width: 700, height: 400)
+        newPopover.contentSize = NSSize(width: 750, height: 400)
         newPopover.behavior = .applicationDefined
         newPopover.animates = false
         newPopover.delegate = self
         newPopover.appearance = NSApp.effectiveAppearance
         let hostingController = NSHostingController(
             rootView: OverviewView(store: store)
-                .frame(width: 700)
+                .frame(width: 750)
                 .background(Color(nsColor: .windowBackgroundColor))
         )
         hostingController.view.appearance = NSApp.effectiveAppearance
