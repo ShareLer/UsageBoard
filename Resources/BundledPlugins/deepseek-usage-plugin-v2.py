@@ -166,7 +166,9 @@ def fetch_platform_cost(bearer_token: str, month: int, year: int) -> list[dict[s
     headers = {
         "accept": "*/*",
         "authorization": f"Bearer {bearer_token}",
-        "user-agent": "Mozilla/5.0",
+        "content-type": "application/json",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+        "x-app-version": "1.0.0",
     }
     request = urllib.request.Request(url, headers=headers)
     try:
@@ -524,7 +526,7 @@ def main() -> int:
                 prev_records = fetch_cost(prev_month, prev_year)
                 all_cost = (prev_records or []) + (cost_records or [])
                 for rec in sorted(all_cost, key=lambda r: r["date"], reverse=True):
-                    if rec["date"] <= today_str and rec.get("models"):
+                    if rec["date"] <= today_str and rec.get("models") and rec.get("total", 0) > 0:
                         today_cost = rec
                         break
         except Exception:

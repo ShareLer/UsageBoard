@@ -367,7 +367,7 @@ struct PluginGroupView: View {
     @ViewBuilder
     private func sectionHeaderWithLabels(title: String, items: [UsageItem]) -> some View {
         if items.first?.labels != nil {
-            HStack(spacing: 3) {
+            HStack(spacing: 2) {
                 Text(title)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.primary)
@@ -376,7 +376,7 @@ struct PluginGroupView: View {
                     .font(.system(size: 11))
                     .foregroundStyle(.primary)
                     .frame(maxWidth: .infinity, alignment: .center)
-                HStack(spacing: 3) {
+                HStack(spacing: 1) {
                     Text("In")
                         .frame(width: 38, alignment: .trailing)
                     Text("Out")
@@ -449,7 +449,7 @@ struct UsageItemRow: View {
     var language: AppLanguage
 
     var body: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: 2) {
             Text(item.name)
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
@@ -462,7 +462,7 @@ struct UsageItemRow: View {
                 .layoutPriority(1)
 
             if let labels = item.labels, !labels.isEmpty {
-                HStack(spacing: 3) {
+                HStack(spacing: 1) {
                     ForEach(labels.indices, id: \.self) { index in
                         Text(labels[index].text)
                             .font(.system(size: 11))
