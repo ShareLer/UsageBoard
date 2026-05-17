@@ -413,20 +413,20 @@ struct UsageItemRow: View {
     var language: AppLanguage
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             Text(item.name)
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .frame(width: 92, alignment: .leading)
+                .frame(width: 128, alignment: .leading)
 
             UsageProgressBar(value: item.progress, label: item.displayValue(), color: item.color)
                 .frame(height: 18)
                 .layoutPriority(1)
 
             if let labels = item.labels, !labels.isEmpty {
-                HStack(spacing: 6) {
+                HStack(spacing: 3) {
                     ForEach(labels.indices, id: \.self) { index in
                         Text(labels[index].text)
                             .font(.system(size: 11))
