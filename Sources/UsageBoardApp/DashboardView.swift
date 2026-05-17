@@ -7,7 +7,7 @@ struct DashboardView: View {
     var mode: DisplayMode
 
     private var maxHeight: CGFloat {
-        (NSScreen.main?.visibleFrame.height ?? 800) * 2 / 3
+        (NSScreen.main?.visibleFrame.height ?? 800) - 120
     }
 
     private var enabledPlugins: [PluginConfiguration] {

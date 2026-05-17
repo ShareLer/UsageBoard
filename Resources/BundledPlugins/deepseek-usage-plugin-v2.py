@@ -61,6 +61,7 @@ import sys
 import urllib.error
 import urllib.request
 from datetime import date as date_type
+from datetime import timedelta
 from typing import Any
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
@@ -447,10 +448,11 @@ def build_cost_chart(cost_records: list[dict[str, Any]]) -> dict[str, Any] | Non
         return None
 
     today = date_type.today()
+    cutoff = (today - timedelta(days=29)).isoformat()
     sorted_records = sorted(
-        (r for r in cost_records if r["date"] <= today.isoformat()),
+        (r for r in cost_records if cutoff <= r["date"] <= today.isoformat()),
         key=lambda r: r["date"],
-    )[-30:]
+    )
     if not sorted_records:
         return None
 
@@ -487,10 +489,11 @@ def build_token_chart(usage_records):
     if not usage_records:
         return None
     today = date_type.today()
+    cutoff = (today - timedelta(days=29)).isoformat()
     sorted_records = sorted(
-        (r for r in usage_records if r["date"] <= today.isoformat()),
+        (r for r in usage_records if cutoff <= r["date"] <= today.isoformat()),
         key=lambda r: r["date"],
-    )[-30:]
+    )
     if not sorted_records:
         return None
     buckets = []
