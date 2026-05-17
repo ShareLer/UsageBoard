@@ -229,7 +229,7 @@ struct PluginGroupView: View {
     var language: AppLanguage
     var nextRefreshAt: Date?
     var onRefresh: (() -> Void)?
-    @State private var isChartExpanded = false
+    @State private var isChartExpanded = true
     private var strings: AppLocalization {
         AppLocalization(language: language)
     }
@@ -255,15 +255,21 @@ struct PluginGroupView: View {
                     }
                     .padding(.vertical, 8)
                 } else if snapshot.items.isEmpty {
-                    Text(strings.text(.noUsageData))
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.vertical, 18)
+                    if snapshot.chart == nil {
+                        Text(strings.text(.noUsageData))
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.vertical, 18)
+                    }
                 } else {
                     VStack(spacing: 8) {
                         ForEach(snapshot.items) { item in
-                            UsageItemRow(item: item, language: language)
+                            if let subtitle = item.subtitle {
+                                SectionHeaderView(title: subtitle)
+                            } else {
+                                UsageItemRow(item: item, language: language)
+                            }
                         }
                     }
                 }
@@ -399,7 +405,7 @@ struct TokenUsageChartView: View {
     private var series: [TokenChartSeries] {
         var output = [
             TokenChartSeries(
-                name: strings.text(.totalTokenUsage),
+                name: chart.totalLabel ?? strings.text(.totalTokenUsage),
                 color: .blue,
                 values: chart.buckets.map(\.total)
             )
@@ -421,6 +427,10 @@ struct TokenUsageChartView: View {
         guard let selectedSeries else { return filtered }
         let selected = filtered.filter { $0.name == selectedSeries }
         return selected.isEmpty ? filtered : selected
+    }
+
+    private var totalCardLabel: String {
+        chart.totalLabel ?? strings.text(.totalTokenUsage)
     }
 
     private var modelSummaries: [TokenModelSummary] {
@@ -451,24 +461,34 @@ struct TokenUsageChartView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if chart.buckets.contains(where: { !$0.segments.isEmpty }) {
-                LazyVGrid(
-                    columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
-                    alignment: .leading,
-                    spacing: 8
-                ) {
-                    Button {
-                        selectedSeries = selectedSeries == strings.text(.totalTokenUsage) ? nil : strings.text(.totalTokenUsage)
+                if let title = chart.title {
+                    Text(title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .padding(.top, 4)
+                }
+
+                if chart.showLegend ?? true {
+                    LazyVGrid(
+                        columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
+                        alignment: .leading,
+                        spacing: 8
+                    ) {
+                        Button {
+                            let label = totalCardLabel
+                        selectedSeries = selectedSeries == label ? nil : label
                     } label: {
                         TokenMetricView(
-                            title: strings.text(.totalTokenUsage),
+                            title: totalCardLabel,
                             value: totalTokens,
                             color: .blue,
-                            isSelected: selectedSeries == strings.text(.totalTokenUsage)
+                            isSelected: selectedSeries == totalCardLabel,
+                            unitLabel: chart.unitLabel
                         )
                         .contentShape(RoundedRectangle(cornerRadius: 6))
                     }
                     .buttonStyle(.plain)
-                    .help(selectedSeries == strings.text(.totalTokenUsage) ? strings.text(.showAllLines) : strings.text(.showOnlyTotalUsage))
+                    .help(selectedSeries == totalCardLabel ? strings.text(.showAllLines) : strings.text(.showOnlyTotalUsage))
 
                     ForEach(modelSummaries) { summary in
                         Button {
@@ -479,13 +499,15 @@ struct TokenUsageChartView: View {
                                 title: strings.usageSuffix(for: summary.name),
                                 value: summary.total,
                                 color: summary.color,
-                                isSelected: selectedSeries == strings.usageSuffix(for: summary.name)
+                                isSelected: selectedSeries == strings.usageSuffix(for: summary.name),
+                                unitLabel: chart.unitLabel
                             )
                             .contentShape(RoundedRectangle(cornerRadius: 6))
                         }
                         .buttonStyle(.plain)
                         .help(selectedSeries == strings.usageSuffix(for: summary.name) ? strings.text(.showAllLines) : strings.showOnlyUsageSuffix(for: summary.name))
                     }
+                }
                 }
 
                 GeometryReader { viewport in
@@ -495,7 +517,8 @@ struct TokenUsageChartView: View {
                             buckets: chart.buckets,
                             series: visibleSeries,
                             maxValue: max(visibleSeries.flatMap(\.values).max() ?? 0, 1),
-                            visibleWidth: viewport.size.width
+                            visibleWidth: viewport.size.width,
+                            unitLabel: chart.unitLabel
                         )
                         .frame(width: resolvedWidth, height: 170)
                     }
@@ -565,6 +588,7 @@ struct TokenMetricView: View {
     var value: Double
     var color: Color
     var isSelected: Bool = false
+    var unitLabel: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -579,15 +603,27 @@ struct TokenMetricView: View {
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text(formattedTokenNumber(value).number)
-                    .font(UB.Font.summaryBig)
-                    .tracking(-0.6)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                Text(formattedTokenNumber(value).unit)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.tertiary)
+                if let unitLabel {
+                    Text(String(format: "%.2f", value))
+                        .font(UB.Font.summaryBig)
+                        .tracking(-0.6)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    Text(unitLabel)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.tertiary)
+                } else {
+                    Text(formattedTokenNumber(value).number)
+                        .font(UB.Font.summaryBig)
+                        .tracking(-0.6)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    Text(formattedTokenNumber(value).unit)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.tertiary)
+                }
             }
         }
         .padding(.horizontal, 6)
@@ -606,6 +642,7 @@ struct TokenLineChartPlot: View {
     var series: [TokenChartSeries]
     var maxValue: Double
     var visibleWidth: CGFloat
+    var unitLabel: String?
     @State private var hoverLocation: CGPoint?
 
     private let leadingWidth: CGFloat = 30
@@ -687,34 +724,37 @@ struct TokenLineChartPlot: View {
     private func lineSeries(in plotRect: CGRect) -> some View {
         ZStack {
             ForEach(series) { item in
-                Path { path in
-                    guard !item.values.isEmpty else { return }
-                    path.move(to: CGPoint(x: xPosition(for: 0, in: plotRect), y: plotRect.maxY))
-                    for index in item.values.indices {
-                        path.addLine(to: CGPoint(
-                            x: xPosition(for: index, in: plotRect),
-                            y: yPosition(for: item.values[index], in: plotRect)
-                        ))
-                    }
-                    path.addLine(to: CGPoint(x: xPosition(for: item.values.count - 1, in: plotRect), y: plotRect.maxY))
-                    path.closeSubpath()
-                }
-                .fill(item.color.opacity(0.06))
-
-                Path { path in
-                    for index in item.values.indices {
-                        let point = CGPoint(
+                let points: [CGPoint] = {
+                    guard !item.values.isEmpty else { return [] }
+                    return item.values.indices.map { index in
+                        CGPoint(
                             x: xPosition(for: index, in: plotRect),
                             y: yPosition(for: item.values[index], in: plotRect)
                         )
-                        if index == item.values.startIndex {
-                            path.move(to: point)
-                        } else {
+                    }
+                }()
+
+                if points.count >= 2 {
+                    // Fill area using straight-line fill (cleaner than smooth fill)
+                    let fillPath = Path { path in
+                        path.move(to: CGPoint(x: points[0].x, y: plotRect.maxY))
+                        for point in points {
                             path.addLine(to: point)
                         }
+                        path.addLine(to: CGPoint(x: points.last!.x, y: plotRect.maxY))
+                        path.closeSubpath()
                     }
+                    fillPath.fill(item.color.opacity(0.06))
+
+                    // Smooth line path
+                    smoothPath(points: points)
+                        .stroke(item.color, style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
+                } else if points.count == 1 {
+                    Circle()
+                        .fill(item.color)
+                        .frame(width: 4, height: 4)
+                        .position(points[0])
                 }
-                .stroke(item.color, style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
             }
         }
     }
@@ -768,7 +808,7 @@ struct TokenLineChartPlot: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                         Spacer(minLength: 4)
-                        Text(formattedTokenNumber(row.2).compact)
+                        Text(unitLabel.map { _ in String(format: "%.2f", row.2) } ?? formattedTokenNumber(row.2).compact)
                             .font(.caption)
                             .foregroundStyle(.primary)
                             .monospacedDigit()
@@ -815,6 +855,37 @@ struct TokenLineChartPlot: View {
     private func valueAt(_ index: Int, in series: TokenChartSeries) -> Double {
         guard series.values.indices.contains(index) else { return 0 }
         return series.values[index]
+    }
+
+    private func smoothPath(points: [CGPoint]) -> Path {
+        Path { path in
+            guard points.count >= 2 else {
+                if points.count == 1 {
+                    path.move(to: points[0])
+                    path.addLine(to: points[0])
+                }
+                return
+            }
+            path.move(to: points[0])
+            for i in 1..<points.count {
+                let prev = points[i - 1]
+                let curr = points[i]
+
+                let prevPrev = i >= 2 ? points[i - 2] : prev
+                let next = i + 1 < points.count ? points[i + 1] : curr
+
+                let cp1 = CGPoint(
+                    x: prev.x + (next.x - prevPrev.x) / 6,
+                    y: prev.y + (next.y - prevPrev.y) / 6
+                )
+                let cp2 = CGPoint(
+                    x: curr.x + (prevPrev.x - next.x) / 6,
+                    y: curr.y + (prevPrev.y - next.y) / 6
+                )
+
+                path.addCurve(to: curr, control1: cp1, control2: cp2)
+            }
+        }
     }
 }
 
@@ -893,6 +964,22 @@ struct FlowLayout: Layout {
         return (items, CGSize(width: min(maxWidth, usedWidth), height: cursor.y + rowHeight))
     }
 }
+
+struct SectionHeaderView: View {
+    var title: String
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+        .padding(.top, 6)
+        .padding(.bottom, -2)
+    }
+}
+
 
 struct UsageProgressBar: View {
     var value: Double
