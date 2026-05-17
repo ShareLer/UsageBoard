@@ -208,7 +208,7 @@ def build_items(
         total_cache_read = sum(r["cache_read"] for r in rows_data)
         total_cache_creation = sum(r["cache_creation"] for r in rows_data)
         total_cr = cache_rate(total_input, total_cache_read, total_cache_creation)
-        total_all = total_input + total_output
+        total_all = total_input + total_output + total_cache_read + total_cache_creation
         total_input_display = total_input + total_cache_read
 
         # Find max total in this group for progress bar baseline
@@ -234,7 +234,7 @@ def build_items(
         # Per-model rows
         for rank, rd in enumerate(rows_data):
             m_cr = cache_rate(rd["input"], rd["cache_read"], rd["cache_creation"])
-            total_m = rd["input"] + rd["output"]
+            total_m = rd["input"] + rd["output"] + rd["cache_read"] + rd["cache_creation"]
             m_input_display = rd["input"] + rd["cache_read"]
 
             items.append({

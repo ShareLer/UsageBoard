@@ -372,8 +372,10 @@ struct PluginGroupView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.primary)
                     .frame(width: 128, alignment: .leading)
-                Color.clear
-                    .layoutPriority(1)
+                Text("总量")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity, alignment: .center)
                 HStack(spacing: 3) {
                     Text("In")
                         .frame(width: 38, alignment: .trailing)
@@ -386,7 +388,13 @@ struct PluginGroupView: View {
                 .foregroundStyle(.primary)
             }
         } else {
-            SectionHeaderView(title: title)
+            HStack(spacing: 3) {
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .frame(width: 128, alignment: .leading)
+                Spacer()
+            }
         }
     }
 

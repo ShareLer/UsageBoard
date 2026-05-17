@@ -513,6 +513,7 @@ def main() -> int:
 
         # Fetch cost data with daily cache
         today_cost = None
+        all_cost = None
         try:
             def fetch_cost(m, y):
                 return _fetch_cached("cost", m, y, lambda: fetch_platform_cost(platform_token, m, y))
@@ -560,7 +561,7 @@ def main() -> int:
                             rates[short] = round(hit / inp * 100, 1)
                     cache_rates = rates if rates else None
 
-                chart = build_cost_chart(all_amount_records)
+                chart = build_cost_chart(all_cost) if all_cost else None
         except Exception:
             pass
 
