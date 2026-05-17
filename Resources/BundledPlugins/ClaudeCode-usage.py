@@ -63,6 +63,7 @@ TRANSLATIONS = {
     "period_today": {"zh-Hans": "今日", "en": "Today"},
     "period_7d": {"zh-Hans": "近7天", "en": "7 days"},
     "period_30d": {"zh-Hans": "近30天", "en": "30 days"},
+    "period_total": {"zh-Hans": "模型总量", "en": "Total"},
     "chart_title": {"zh-Hans": "近30日趋势", "en": "30-day trend"},
     "no_session_data": {
         "zh-Hans": "暂无会话数据",
@@ -215,7 +216,7 @@ def build_items(
         # Period total row
         items.append({
             "id": f"cc-{period_id}-total",
-            "name": period_label,
+            "name": translate(language, "period_total"),
             "subtitle": period_label,
             "used": total_all,
             "limit": group_max,
