@@ -209,6 +209,7 @@ def build_items(
         total_cache_creation = sum(r["cache_creation"] for r in rows_data)
         total_cr = cache_rate(total_input, total_cache_read, total_cache_creation)
         total_all = total_input + total_output
+        total_input_display = total_input + total_cache_read
 
         # Find max total in this group for progress bar baseline
         group_max = max(total_all, max(r["input"] + r["output"] for r in rows_data))
@@ -224,7 +225,7 @@ def build_items(
             "status": "normal",
             "color": "green",
             "labels": [
-                {"text": format_token(total_input), "color": "blue"},
+                {"text": format_token(total_input_display), "color": "blue"},
                 {"text": format_token(total_output), "color": "orange"},
                 {"text": f"{total_cr}%", "color": cache_rate_color(total_cr)},
             ],
@@ -234,6 +235,7 @@ def build_items(
         for rank, rd in enumerate(rows_data):
             m_cr = cache_rate(rd["input"], rd["cache_read"], rd["cache_creation"])
             total_m = rd["input"] + rd["output"]
+            m_input_display = rd["input"] + rd["cache_read"]
 
             items.append({
                 "id": f"cc-{period_id}-m{rank}",
@@ -245,7 +247,7 @@ def build_items(
                 "status": "normal",
                 "color": "green",
                 "labels": [
-                    {"text": format_token(rd["input"]), "color": "blue"},
+                    {"text": format_token(m_input_display), "color": "blue"},
                     {"text": format_token(rd["output"]), "color": "orange"},
                     {"text": f"{m_cr}%", "color": cache_rate_color(m_cr)},
                 ],

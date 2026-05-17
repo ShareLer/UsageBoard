@@ -356,12 +356,37 @@ struct PluginGroupView: View {
                     if let title = section.title {
                         SectionHeaderView(title: title)
                     }
+                    if let first = section.items.first, first.labels != nil {
+                        labelsHeaderView
+                    }
                     ForEach(section.items) { item in
                         UsageItemRow(item: item, language: language)
                     }
                 }
             }
         }
+    }
+
+    private var labelsHeaderView: some View {
+        HStack(spacing: 3) {
+            Text("总量")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity, alignment: .center)
+
+            HStack(spacing: 3) {
+                Text("In")
+                    .frame(width: 38, alignment: .trailing)
+                Text("Out")
+                    .frame(width: 38, alignment: .trailing)
+                Text("Cache")
+                    .frame(width: 38, alignment: .trailing)
+            }
+            .font(.system(size: 10, weight: .medium))
+            .foregroundStyle(.tertiary)
+        }
+        .padding(.leading, 128 + 3)
+        .padding(.trailing, 8)
     }
 
     private struct ItemSection: Identifiable {
