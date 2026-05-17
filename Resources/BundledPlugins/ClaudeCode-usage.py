@@ -267,7 +267,7 @@ def query_chart_data(
         rows = conn.execute(
             """SELECT date,
                       model,
-                      SUM(input_tokens + output_tokens) as total_tokens
+                      SUM(input_tokens + output_tokens + cache_read_tokens + cache_creation_tokens) as total_tokens
                FROM usage_daily_rollups
                WHERE app_type = 'claude'
                  AND date >= ?
@@ -286,7 +286,7 @@ def query_chart_data(
             raw_rows = conn.execute(
                 """SELECT date(datetime(created_at, 'unixepoch')) as date,
                           model,
-                          SUM(input_tokens + output_tokens) as total_tokens
+                          SUM(input_tokens + output_tokens + cache_read_tokens + cache_creation_tokens) as total_tokens
                    FROM proxy_request_logs
                    WHERE app_type = 'claude'
                      AND created_at >= ?
