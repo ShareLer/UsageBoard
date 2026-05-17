@@ -118,7 +118,9 @@ public struct PluginExecutor: Sendable {
                 updatedAt: pluginOutput.updatedAt,
                 badge: pluginOutput.badge,
                 iconURL: configuration.metadata?.icon,
-                chart: pluginOutput.chart
+                chart: pluginOutput.chart,
+                charts: pluginOutput.charts,
+                sessions: pluginOutput.sessions
             )
         } catch {
             if let errorOutput = try? UsageBoardJSON.decoder().decode(PluginOutputError.self, from: outputData),
