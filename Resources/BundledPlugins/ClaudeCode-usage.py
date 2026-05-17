@@ -306,10 +306,21 @@ def query_chart_data(
         all_models.update(data.keys())
     sorted_models = sorted(all_models)
 
+    # Keep only top 5 models by total token usage
+    model_totals: dict[str, float] = {}
+    for data in daily_data.values():
+        for model, tokens in data.items():
+            model_totals[model] = model_totals.get(model, 0) + tokens
+    top5_models = set(
+        sorted(model_totals, key=model_totals.get, reverse=True)[:5]
+    )
+
     buckets: list[dict[str, Any]] = []
     for date_key in sorted_dates:
         segments: list[dict[str, Any]] = []
         for model in sorted_models:
+            if model not in top5_models:
+                continue
             tokens = daily_data[date_key].get(model, 0)
             if tokens > 0:
                 segments.append({"model": model, "tokens": tokens})
