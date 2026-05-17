@@ -26,7 +26,13 @@ struct DashboardView: View {
                 switch mode {
                 case .grouped:
                     MeasuredScrollView(maxHeight: maxHeight) {
-                        VStack(spacing: 8) {
+                        LazyVGrid(
+                            columns: [
+                                GridItem(.flexible(), spacing: 8),
+                                GridItem(.flexible(), spacing: 8)
+                            ],
+                            spacing: 8
+                        ) {
                             ForEach(enabledPlugins) { plugin in
                                 PluginGroupView(
                                     snapshot: store.snapshot(for: plugin),
