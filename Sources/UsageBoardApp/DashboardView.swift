@@ -40,6 +40,7 @@ struct DashboardView: View {
                                 ) {
                                     store.refresh(pluginID: plugin.id, force: true)
                                 }
+                                .frame(maxHeight: .infinity, alignment: .top)
                             }
                         }
                         .padding(10)
@@ -278,6 +279,7 @@ struct PluginGroupView: View {
                 Divider()
                     .padding(.horizontal, 8)
                 TokenUsageChartView(chart: chart, language: language)
+                    .frame(maxHeight: .infinity)
                     .padding(.horizontal, 8)
                     .padding(.top, 8)
                     .padding(.bottom, 8)
@@ -579,6 +581,7 @@ struct TokenUsageChartView: View {
                 }
 
                 GeometryReader { viewport in
+                    let plotHeight = max(170, viewport.size.height)
                     ScrollView(.horizontal, showsIndicators: false) {
                         let resolvedWidth = resolvedChartWidth(for: viewport.size.width)
                         TokenLineChartPlot(
@@ -588,11 +591,11 @@ struct TokenUsageChartView: View {
                             visibleWidth: viewport.size.width,
                             unitLabel: chart.unitLabel
                         )
-                        .frame(width: resolvedWidth, height: 170)
+                        .frame(width: resolvedWidth, height: plotHeight)
                     }
                     .coordinateSpace(name: "TokenChartScroll")
                 }
-                .frame(height: 170)
+                .frame(minHeight: 170)
             } else {
                 Text(chart.message ?? strings.text(.noStatsData))
                     .font(.caption)
