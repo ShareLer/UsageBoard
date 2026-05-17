@@ -28,8 +28,7 @@ struct DashboardView: View {
                     MeasuredScrollView(maxHeight: maxHeight) {
                         LazyVGrid(
                             columns: [
-                                GridItem(.flexible(), spacing: 8),
-                                GridItem(.flexible(), spacing: 8)
+                                GridItem(.adaptive(minimum: 320), spacing: 8)
                             ],
                             spacing: 8
                         ) {
@@ -345,14 +344,20 @@ struct PluginGroupView: View {
     }
 
     private var groupedItemsView: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 0) {
             ForEach(groupedItems.indices, id: \.self) { sectionIndex in
-                let section = groupedItems[sectionIndex]
-                if let title = section.title {
-                    SectionHeaderView(title: title)
+                if sectionIndex > 0 {
+                    Divider()
+                        .padding(.vertical, 4)
                 }
-                ForEach(section.items) { item in
-                    UsageItemRow(item: item, language: language)
+                let section = groupedItems[sectionIndex]
+                VStack(spacing: 8) {
+                    if let title = section.title {
+                        SectionHeaderView(title: title)
+                    }
+                    ForEach(section.items) { item in
+                        UsageItemRow(item: item, language: language)
+                    }
                 }
             }
         }

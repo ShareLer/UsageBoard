@@ -250,7 +250,9 @@ def query_chart_data(
     conn: sqlite3.Connection, language: str
 ) -> dict[str, Any] | None:
     cutoff = (datetime.now() - timedelta(days=29)).strftime("%Y-%m-%d")
+    cutoff_ts = int((datetime.now() - timedelta(days=29)).timestamp())
 
+    # Try usage_daily_rollups first (pre-aggregated)
     try:
         rows = conn.execute(
             """SELECT date,
@@ -264,7 +266,27 @@ def query_chart_data(
             (cutoff,),
         ).fetchall()
     except sqlite3.OperationalError:
-        return None
+        rows = []
+
+    # Fallback: query proxy_request_logs directly
+    if not rows:
+        try:
+            from datetime import datetime as dt
+
+            raw_rows = conn.execute(
+                """SELECT date(datetime(created_at, 'unixepoch')) as day,
+                          model,
+                          SUM(input_tokens + output_tokens) as total_tokens
+                   FROM proxy_request_logs
+                   WHERE app_type = 'claude'
+                     AND created_at >= ?
+                   GROUP BY day, model
+                   ORDER BY day""",
+                (cutoff_ts,),
+            ).fetchall()
+            rows = raw_rows
+        except sqlite3.OperationalError:
+            return None
 
     if not rows:
         return None
