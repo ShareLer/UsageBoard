@@ -270,15 +270,15 @@ struct PluginGroupView: View {
                     groupedItemsView
                 }
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 8)
             .padding(.top, 10)
             .padding(.bottom, 10)
 
             if let chart = snapshot.chart {
                 Divider()
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, 8)
                 TokenUsageChartView(chart: chart, language: language)
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, 8)
                     .padding(.top, 8)
                     .padding(.bottom, 8)
             }
@@ -434,7 +434,7 @@ struct UsageItemRow: View {
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                             .foregroundStyle(resolveLabelColor(labels[index].color))
-                            .frame(width: 60, alignment: .trailing)
+                            .frame(width: 44, alignment: .trailing)
                     }
                 }
             } else {
@@ -1072,7 +1072,7 @@ struct UsageProgressBar: View {
                     .frame(maxWidth: .infinity, alignment: .center)
             }
         }
-        .frame(minWidth: 80, idealHeight: 18, maxHeight: 18)
+        .frame(minWidth: 60, idealHeight: 18, maxHeight: 18)
         .clipShape(RoundedRectangle(cornerRadius: UB.Radius.bar, style: .continuous))
         .accessibilityLabel(label)
     }
