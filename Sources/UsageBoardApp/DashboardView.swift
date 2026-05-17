@@ -345,12 +345,11 @@ struct PluginGroupView: View {
 
     private var groupedItemsView: some View {
         VStack(spacing: 0) {
-            ForEach(groupedItems.indices, id: \.self) { sectionIndex in
-                if sectionIndex > 0 {
+            ForEach(itemSections) { section in
+                if section.id != itemSections.first?.id {
                     Divider()
                         .padding(.vertical, 4)
                 }
-                let section = groupedItems[sectionIndex]
                 VStack(spacing: 8) {
                     if let title = section.title {
                         SectionHeaderView(title: title)
@@ -363,18 +362,26 @@ struct PluginGroupView: View {
         }
     }
 
-    private typealias ItemGroup = (title: String?, items: [UsageItem])
+    private struct ItemSection: Identifiable {
+        var id: String
+        var title: String?
+        var items: [UsageItem]
+    }
 
-    private var groupedItems: [ItemGroup] {
-        var groups: [ItemGroup] = []
+    private var itemSections: [ItemSection] {
+        var sections: [ItemSection] = []
         for item in snapshot.items {
-            if let last = groups.last, last.title == item.subtitle, item.subtitle != nil {
-                groups[groups.count - 1].items.append(item)
+            if let last = sections.last, last.title == item.subtitle, item.subtitle != nil {
+                sections[sections.count - 1].items.append(item)
             } else {
-                groups.append((title: item.subtitle, items: [item]))
+                sections.append(ItemSection(
+                    id: item.id,
+                    title: item.subtitle,
+                    items: [item]
+                ))
             }
         }
-        return groups
+        return sections
     }
 }
 
