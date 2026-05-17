@@ -528,7 +528,7 @@ public struct UsageItem: Codable, Equatable, Identifiable, Sendable {
         case .ratio:
             return "\(UsageItem.formatNumber(used)) / \(UsageItem.formatNumber(limit))"
         case .value:
-            return String(format: "%.2f", used)
+            return Self.formatTokenValue(used)
         case .percent2:
             return String(format: "%.2f", progress * 100) + "%"
         }
@@ -546,6 +546,19 @@ public struct UsageItem: Codable, Equatable, Identifiable, Sendable {
         }
         let date = resetAt.formatted(.dateTime.month(.defaultDigits).day(.defaultDigits))
         return "\(date) \(time)"
+    }
+
+    private static func formatTokenValue(_ value: Double) -> String {
+        if value >= 1_000_000 {
+            return String(format: "%.1fM", value / 1_000_000)
+        }
+        if value >= 1_000 {
+            return String(format: "%.0fK", value / 1_000)
+        }
+        if value.rounded() == value {
+            return String(Int(value))
+        }
+        return String(format: "%.2f", value)
     }
 
     private static func formatNumber(_ value: Double) -> String {

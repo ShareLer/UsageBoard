@@ -187,26 +187,38 @@ def build_items(
         if not rows:
             continue
 
-        total_input = sum(row["total_input"] or 0 for row in rows)
-        total_output = sum(row["total_output"] or 0 for row in rows)
-        total_cache_read = sum(row["total_cache_read"] or 0 for row in rows)
-        total_cache_creation = sum(row["total_cache_creation"] or 0 for row in rows)
+        # Collect all token totals for this period
+        rows_data = []
+        for row in rows:
+            ri = row["total_input"] or 0
+            ro = row["total_output"] or 0
+            rcr = row["total_cache_read"] or 0
+            rcc = row["total_cache_creation"] or 0
+            rows_data.append({
+                "model": row["model"] or "unknown",
+                "input": ri,
+                "output": ro,
+                "cache_read": rcr,
+                "cache_creation": rcc,
+            })
+
+        total_input = sum(r["input"] for r in rows_data)
+        total_output = sum(r["output"] for r in rows_data)
+        total_cache_read = sum(r["cache_read"] for r in rows_data)
+        total_cache_creation = sum(r["cache_creation"] for r in rows_data)
         total_cr = cache_rate(total_input, total_cache_read, total_cache_creation)
+        total_all = total_input + total_output
+
+        # Find max total in this group for progress bar baseline
+        group_max = max(total_all, max(r["input"] + r["output"] for r in rows_data))
 
         # Period total row
         items.append({
             "id": f"cc-{period_id}-total",
             "name": period_label,
-            "used": min(
-                max(
-                    (total_input + total_output)
-                    / max(total_input + total_output, 1),
-                    0,
-                ),
-                1,
-            ),
-            "limit": 1,
-            "displayStyle": "percent",
+            "used": total_all,
+            "limit": group_max,
+            "displayStyle": "value",
             "status": "normal",
             "color": "green",
             "labels": [
@@ -217,28 +229,21 @@ def build_items(
         })
 
         # Per-model rows
-        for rank, row in enumerate(rows):
-            model = row["model"] or "unknown"
-            m_input = row["total_input"] or 0
-            m_output = row["total_output"] or 0
-            m_cache_read = row["total_cache_read"] or 0
-            m_cache_creation = row["total_cache_creation"] or 0
-            m_cr = cache_rate(m_input, m_cache_read, m_cache_creation)
-            total_m = m_input + m_output
-            period_total = total_input + total_output
-            m_progress = min(total_m / max(period_total, 1), 1)
+        for rank, rd in enumerate(rows_data):
+            m_cr = cache_rate(rd["input"], rd["cache_read"], rd["cache_creation"])
+            total_m = rd["input"] + rd["output"]
 
             items.append({
                 "id": f"cc-{period_id}-m{rank}",
-                "name": f" {model}",
-                "used": m_progress,
-                "limit": 1,
-                "displayStyle": "percent",
+                "name": f" {rd['model']}",
+                "used": total_m,
+                "limit": group_max,
+                "displayStyle": "value",
                 "status": "normal",
                 "color": "green",
                 "labels": [
-                    {"text": format_token(m_input), "color": "blue"},
-                    {"text": format_token(m_output), "color": "orange"},
+                    {"text": format_token(rd["input"]), "color": "blue"},
+                    {"text": format_token(rd["output"]), "color": "orange"},
                     {"text": f"{m_cr}%", "color": cache_rate_color(m_cr)},
                 ],
             })
