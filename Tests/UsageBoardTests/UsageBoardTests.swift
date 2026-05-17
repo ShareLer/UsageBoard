@@ -521,6 +521,85 @@ final class UsageBoardTests: XCTestCase {
         XCTAssertEqual(message, "API Key 无效，请检查配置")
         XCTAssertTrue(snapshot.items.isEmpty)
     }
+
+    func testUsageItemLabelDecodes() throws {
+        let json = """
+        {
+          "id": "test",
+          "name": "Test",
+          "used": 45,
+          "limit": 100,
+          "displayStyle": "percent",
+          "status": "normal",
+          "labels": [
+            {"text": "123", "color": "blue"},
+            {"text": "15%", "color": "green"}
+          ]
+        }
+        """.data(using: .utf8)!
+        let item = try UsageBoardJSON.decoder().decode(UsageItem.self, from: json)
+        XCTAssertEqual(item.labels?.count, 2)
+        XCTAssertEqual(item.labels?.first?.text, "123")
+        XCTAssertEqual(item.labels?.first?.color, "blue")
+    }
+
+    func testUsageItemLabelOptionalWhenMissing() throws {
+        let json = """
+        {
+          "id": "test",
+          "name": "Test",
+          "used": 45,
+          "limit": 100,
+          "displayStyle": "percent",
+          "status": "normal"
+        }
+        """.data(using: .utf8)!
+        let item = try UsageBoardJSON.decoder().decode(UsageItem.self, from: json)
+        XCTAssertNil(item.labels)
+    }
+
+    func testPluginChartTitleAndShowLegendDecode() throws {
+        let json = """
+        {
+          "kind": "line",
+          "period": "30d",
+          "bucketUnit": "day",
+          "buckets": [],
+          "title": "近30日趋势",
+          "showLegend": false
+        }
+        """.data(using: .utf8)!
+        let chart = try UsageBoardJSON.decoder().decode(PluginChart.self, from: json)
+        XCTAssertEqual(chart.title, "近30日趋势")
+        XCTAssertEqual(chart.showLegend, false)
+    }
+
+    func testPluginOutputSessionsDecode() throws {
+        let json = """
+        {
+          "updatedAt": "2026-05-17T00:00:00Z",
+          "items": [],
+          "sessions": {"active": 3, "today": 7}
+        }
+        """.data(using: .utf8)!
+        let output = try UsageBoardJSON.decoder().decode(PluginOutput.self, from: json)
+        XCTAssertEqual(output.sessions?.active, 3)
+        XCTAssertEqual(output.sessions?.today, 7)
+    }
+
+    func testPluginChartTitleDefaultsToNil() throws {
+        let json = """
+        {
+          "kind": "line",
+          "period": "7d",
+          "bucketUnit": "day",
+          "buckets": []
+        }
+        """.data(using: .utf8)!
+        let chart = try UsageBoardJSON.decoder().decode(PluginChart.self, from: json)
+        XCTAssertNil(chart.title)
+        XCTAssertNil(chart.showLegend)
+    }
 }
 #else
 struct UsageBoardTestsPlaceholder {}

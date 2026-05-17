@@ -39,6 +39,8 @@ public enum DisplayMode: String, Codable, CaseIterable, Identifiable, Sendable {
 public enum UsageDisplayStyle: String, Codable, CaseIterable, Identifiable, Sendable {
     case percent
     case ratio
+    case value
+    case percent2
 
     public var id: String { rawValue }
 }
@@ -340,17 +342,29 @@ public struct PluginConfiguration: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+public struct SessionInfo: Codable, Equatable, Sendable {
+    public var active: Int
+    public var today: Int
+
+    public init(active: Int, today: Int) {
+        self.active = active
+        self.today = today
+    }
+}
+
 public struct PluginOutput: Decodable, Equatable, Sendable {
     public var updatedAt: Date
     public var items: [UsageItem]
     public var badge: String?
     public var chart: PluginChart?
+    public var sessions: SessionInfo?
 
-    public init(updatedAt: Date, items: [UsageItem], badge: String? = nil, chart: PluginChart? = nil) {
+    public init(updatedAt: Date, items: [UsageItem], badge: String? = nil, chart: PluginChart? = nil, sessions: SessionInfo? = nil) {
         self.updatedAt = updatedAt
         self.items = items
         self.badge = badge
         self.chart = chart
+        self.sessions = sessions
     }
 }
 
@@ -360,6 +374,10 @@ public struct PluginChart: Codable, Equatable, Sendable {
     public var bucketUnit: String
     public var buckets: [PluginChartBucket]
     public var message: String?
+    public var totalLabel: String?
+    public var unitLabel: String?
+    public var title: String?
+    public var showLegend: Bool?
 
     private static let validBucketUnits: Set<String> = ["hour", "day"]
 
@@ -372,13 +390,21 @@ public struct PluginChart: Codable, Equatable, Sendable {
         period: String,
         bucketUnit: String,
         buckets: [PluginChartBucket],
-        message: String? = nil
+        message: String? = nil,
+        totalLabel: String? = nil,
+        unitLabel: String? = nil,
+        title: String? = nil,
+        showLegend: Bool? = nil
     ) {
         self.kind = kind
         self.period = period
         self.bucketUnit = Self.normalizedBucketUnit(bucketUnit)
         self.buckets = buckets
         self.message = message
+        self.totalLabel = totalLabel
+        self.unitLabel = unitLabel
+        self.title = title
+        self.showLegend = showLegend
     }
 
     public init(from decoder: Decoder) throws {
@@ -389,6 +415,10 @@ public struct PluginChart: Codable, Equatable, Sendable {
         self.bucketUnit = Self.normalizedBucketUnit(rawBucketUnit)
         self.buckets = try container.decode([PluginChartBucket].self, forKey: .buckets)
         self.message = try container.decodeIfPresent(String.self, forKey: .message)
+        self.totalLabel = try container.decodeIfPresent(String.self, forKey: .totalLabel)
+        self.unitLabel = try container.decodeIfPresent(String.self, forKey: .unitLabel)
+        self.title = try container.decodeIfPresent(String.self, forKey: .title)
+        self.showLegend = try container.decodeIfPresent(Bool.self, forKey: .showLegend)
     }
 }
 
@@ -417,7 +447,37 @@ public struct PluginChartSegment: Codable, Equatable, Identifiable, Sendable {
         self.tokens = tokens
     }
 
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        model = try container.decode(String.self, forKey: .model)
+        if let value = try container.decodeIfPresent(Double.self, forKey: .value) {
+            tokens = value
+        } else {
+            tokens = try container.decode(Double.self, forKey: .tokens)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(model, forKey: .model)
+        try container.encode(tokens, forKey: .tokens)
+    }
+
     public var id: String { model }
+
+    private enum CodingKeys: String, CodingKey {
+        case model, tokens, value
+    }
+}
+
+public struct UsageItemLabel: Codable, Equatable, Sendable {
+    public var text: String
+    public var color: String?
+
+    public init(text: String, color: String? = nil) {
+        self.text = text
+        self.color = color
+    }
 }
 
 public struct UsageItem: Codable, Equatable, Identifiable, Sendable {
@@ -429,6 +489,8 @@ public struct UsageItem: Codable, Equatable, Identifiable, Sendable {
     public var resetAt: Date?
     public var status: UsageStatus
     public var color: String?
+    public var labels: [UsageItemLabel]?
+    public var subtitle: String?
 
     public init(
         id: String,
@@ -438,7 +500,9 @@ public struct UsageItem: Codable, Equatable, Identifiable, Sendable {
         displayStyle: UsageDisplayStyle,
         resetAt: Date? = nil,
         status: UsageStatus = .unknown,
-        color: String? = nil
+        color: String? = nil,
+        labels: [UsageItemLabel]? = nil,
+        subtitle: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -448,6 +512,8 @@ public struct UsageItem: Codable, Equatable, Identifiable, Sendable {
         self.resetAt = resetAt
         self.status = status
         self.color = color
+        self.labels = labels
+        self.subtitle = subtitle
     }
 
     public var progress: Double {
@@ -461,6 +527,10 @@ public struct UsageItem: Codable, Equatable, Identifiable, Sendable {
             return "\(Int((progress * 100).rounded()))%"
         case .ratio:
             return "\(UsageItem.formatNumber(used)) / \(UsageItem.formatNumber(limit))"
+        case .value:
+            return String(format: "%.2f", used)
+        case .percent2:
+            return String(format: "%.2f", progress * 100) + "%"
         }
     }
 
@@ -541,6 +611,7 @@ public struct PluginSnapshot: Equatable, Identifiable, Sendable {
     public var badge: String?
     public var iconURL: String?
     public var chart: PluginChart?
+    public var sessions: SessionInfo?
 
     public init(
         id: UUID,
@@ -551,7 +622,8 @@ public struct PluginSnapshot: Equatable, Identifiable, Sendable {
         updatedAt: Date? = nil,
         badge: String? = nil,
         iconURL: String? = nil,
-        chart: PluginChart? = nil
+        chart: PluginChart? = nil,
+        sessions: SessionInfo? = nil
     ) {
         self.id = id
         self.pluginName = pluginName
@@ -562,6 +634,7 @@ public struct PluginSnapshot: Equatable, Identifiable, Sendable {
         self.badge = badge
         self.iconURL = iconURL
         self.chart = chart
+        self.sessions = sessions
     }
 }
 
