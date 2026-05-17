@@ -357,13 +357,15 @@ public struct PluginOutput: Decodable, Equatable, Sendable {
     public var items: [UsageItem]
     public var badge: String?
     public var chart: PluginChart?
+    public var charts: [PluginChart]?
     public var sessions: SessionInfo?
 
-    public init(updatedAt: Date, items: [UsageItem], badge: String? = nil, chart: PluginChart? = nil, sessions: SessionInfo? = nil) {
+    public init(updatedAt: Date, items: [UsageItem], badge: String? = nil, chart: PluginChart? = nil, charts: [PluginChart]? = nil, sessions: SessionInfo? = nil) {
         self.updatedAt = updatedAt
         self.items = items
         self.badge = badge
         self.chart = chart
+        self.charts = charts
         self.sessions = sessions
     }
 }
@@ -624,6 +626,7 @@ public struct PluginSnapshot: Equatable, Identifiable, Sendable {
     public var badge: String?
     public var iconURL: String?
     public var chart: PluginChart?
+    public var charts: [PluginChart]?
     public var sessions: SessionInfo?
 
     public init(
@@ -636,6 +639,7 @@ public struct PluginSnapshot: Equatable, Identifiable, Sendable {
         badge: String? = nil,
         iconURL: String? = nil,
         chart: PluginChart? = nil,
+        charts: [PluginChart]? = nil,
         sessions: SessionInfo? = nil
     ) {
         self.id = id
@@ -647,6 +651,7 @@ public struct PluginSnapshot: Equatable, Identifiable, Sendable {
         self.badge = badge
         self.iconURL = iconURL
         self.chart = chart
+        self.charts = charts
         self.sessions = sessions
     }
 }

@@ -275,7 +275,18 @@ struct PluginGroupView: View {
             .padding(.top, 10)
             .padding(.bottom, 10)
 
-            if let chart = snapshot.chart {
+            if let charts = snapshot.charts, !charts.isEmpty {
+                ForEach(charts.indices, id: \.self) { index in
+                    let chart = charts[index]
+                    Divider()
+                        .padding(.horizontal, 8)
+                    TokenUsageChartView(chart: chart, language: language)
+                        .frame(maxHeight: .infinity)
+                        .padding(.horizontal, 8)
+                        .padding(.top, 8)
+                        .padding(.bottom, 8)
+                }
+            } else if let chart = snapshot.chart {
                 Divider()
                     .padding(.horizontal, 8)
                 TokenUsageChartView(chart: chart, language: language)
@@ -352,7 +363,7 @@ struct PluginGroupView: View {
                     Divider()
                         .padding(.vertical, 4)
                 }
-                VStack(spacing: 4) {
+                VStack(spacing: 2) {
                     if let title = section.title {
                         sectionHeaderWithLabels(title: title, items: section.items)
                     }

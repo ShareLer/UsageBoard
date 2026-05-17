@@ -2,9 +2,9 @@
 # UsageBoardPlugin:
 # {
 #   "schemaVersion": 1,
-#   "name": "DeepSeek-V4",
-#   "name@zh-Hans": "DeepSeek-V4",
-#   "name@en": "DeepSeek-V4",
+#   "name": "DeepSeek",
+#   "name@zh-Hans": "DeepSeek",
+#   "name@en": "DeepSeek",
 #   "icon": "https://raw.githubusercontent.com/lobehub/lobe-icons/refs/heads/master/packages/static-png/light/deepseek-color.png",
 #   "description": "查询 DeepSeek API 余额（含消费统计）",
 #   "description@zh-Hans": "查询 DeepSeek API 余额（含消费统计）",
@@ -380,7 +380,7 @@ def build_items(data: dict[str, Any], language: str, limit_amount: float,
             items.append({
                 "id": f"today-{model['name']}",
                 "name": translate(language, "today_cost"),
-                "subtitle": f"deepseek-{short_name}",
+                "subtitle": f"deepseek-v4-{short_name}",
                 "used": cost,
                 "limit": 1,
                 "displayStyle": "value",
@@ -392,7 +392,7 @@ def build_items(data: dict[str, Any], language: str, limit_amount: float,
             items.append({
                 "id": f"cache-{model['name']}",
                 "name": translate(language, "cache_rate"),
-                "subtitle": f"deepseek-{short_name}",
+                "subtitle": f"deepseek-v4-{short_name}",
                 "used": rate if rate is not None else 0,
                 "limit": 100,
                 "displayStyle": "percent2",
@@ -467,6 +467,48 @@ def build_cost_chart(cost_records: list[dict[str, Any]]) -> dict[str, Any] | Non
         "kind": "line",
         "period": "30d",
         "bucketUnit": "day",
+        "title": "近30日消费趋势",
+        "showLegend": False,
+        "buckets": buckets,
+        "unitLabel": "$",
+    }
+
+
+def build_token_chart(usage_records):
+    """Build a 30-day token usage trend chart with flash + pro lines."""
+    if not usage_records:
+        return None
+    today = date_type.today()
+    sorted_records = sorted(
+        (r for r in usage_records if r["date"] <= today.isoformat()),
+        key=lambda r: r["date"],
+    )[-30:]
+    if not sorted_records:
+        return None
+    buckets = []
+    for rec in sorted_records:
+        parts = rec["date"].split("-")
+        label = f"{int(parts[1])}/{int(parts[2])}"
+        segments = []
+        for m in sorted(rec.get("models", []), key=lambda x: x["name"]):
+            short = _short_model(m["name"])
+            tokens = m.get("input", 0) + m.get("output", 0)
+            if short in ("flash", "pro") and tokens > 0:
+                segments.append({"model": short, "tokens": round(float(tokens), 2)})
+        if segments:
+            buckets.append({
+                "id": rec["date"],
+                "label": label,
+                "segments": segments,
+            })
+    if not buckets:
+        return None
+    return {
+        "kind": "line",
+        "period": "30d",
+        "bucketUnit": "day",
+        "title": "近30日Token趋势",
+        "showLegend": False,
         "buckets": buckets,
     }
 
@@ -530,9 +572,9 @@ def main() -> int:
         except Exception:
             pass
 
-        # Fetch usage data — use for both cache rates and chart
+        # Fetch usage data — use for both cache rates and charts
         cache_rates = None
-        chart = None
+        charts = None
         try:
             months = [(cur_month, cur_year)]
             if cur_month > 1:
@@ -558,7 +600,11 @@ def main() -> int:
                             rates[short] = round(hit / inp * 100, 1)
                     cache_rates = rates if rates else None
 
-                chart = build_cost_chart(all_cost) if all_cost else None
+                token_chart = build_token_chart(all_amount_records) if all_amount_records else None
+                cost_chart = build_cost_chart(all_cost) if all_cost else None
+                charts = []
+                if cost_chart: charts.append(cost_chart)
+                if token_chart: charts.append(token_chart)
         except Exception:
             pass
 
@@ -566,7 +612,11 @@ def main() -> int:
     except Exception:
         return failure(translate(language, "usage_parse_failed"))
 
-    return success(items, chart=chart)
+    output = {"schemaVersion": 1, "updatedAt": utc_now_iso(), "items": items}
+    if charts:
+        output["charts"] = charts
+    print(json.dumps(output, ensure_ascii=False))
+    return 0
 
 
 if __name__ == "__main__":
