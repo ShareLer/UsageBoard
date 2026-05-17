@@ -36,7 +36,7 @@ struct AppLocalization {
     }
 
     func usageSuffix(for name: String) -> String {
-        language == .en ? "\(name) usage" : "\(name) 用量"
+        name
     }
 
     func showOnlyUsageSuffix(for name: String) -> String {

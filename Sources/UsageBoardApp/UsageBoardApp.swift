@@ -40,7 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
             return
         }
         let newPopover = NSPopover()
-        newPopover.contentSize = NSSize(width: 750, height: 800)
+        newPopover.contentSize = NSSize(width: 750, height: 850)
         newPopover.behavior = .applicationDefined
         newPopover.animates = false
         newPopover.delegate = self

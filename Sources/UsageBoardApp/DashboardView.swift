@@ -466,7 +466,7 @@ struct UsageItemRow: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .frame(minWidth: 60, maxWidth: 128, alignment: .leading)
+                .frame(width: 100, alignment: .leading)
 
             UsageProgressBar(value: item.progress, label: item.displayValue(), color: item.color)
                 .frame(height: 18)
