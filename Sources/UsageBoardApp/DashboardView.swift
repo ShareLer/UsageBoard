@@ -875,12 +875,12 @@ struct TokenLineChartPlot: View {
                 let next = i + 1 < points.count ? points[i + 1] : curr
 
                 let cp1 = CGPoint(
-                    x: prev.x + (next.x - prevPrev.x) / 6,
-                    y: prev.y + (next.y - prevPrev.y) / 6
+                    x: prev.x + (curr.x - prevPrev.x) / 6,
+                    y: prev.y + (curr.y - prevPrev.y) / 6
                 )
                 let cp2 = CGPoint(
-                    x: curr.x + (prevPrev.x - next.x) / 6,
-                    y: curr.y + (prevPrev.y - next.y) / 6
+                    x: curr.x - (next.x - prev.x) / 6,
+                    y: curr.y - (next.y - prev.y) / 6
                 )
 
                 path.addCurve(to: curr, control1: cp1, control2: cp2)
