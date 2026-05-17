@@ -274,14 +274,14 @@ def query_chart_data(
             from datetime import datetime as dt
 
             raw_rows = conn.execute(
-                """SELECT date(datetime(created_at, 'unixepoch')) as day,
+                """SELECT date(datetime(created_at, 'unixepoch')) as date,
                           model,
                           SUM(input_tokens + output_tokens) as total_tokens
                    FROM proxy_request_logs
                    WHERE app_type = 'claude'
                      AND created_at >= ?
-                   GROUP BY day, model
-                   ORDER BY day""",
+                   GROUP BY date, model
+                   ORDER BY date""",
                 (cutoff_ts,),
             ).fetchall()
             rows = raw_rows
