@@ -354,10 +354,7 @@ struct PluginGroupView: View {
                 }
                 VStack(spacing: 8) {
                     if let title = section.title {
-                        SectionHeaderView(title: title)
-                    }
-                    if let first = section.items.first, first.labels != nil {
-                        labelsHeaderView
+                        sectionHeaderWithLabels(title: title, items: section.items)
                     }
                     ForEach(section.items) { item in
                         UsageItemRow(item: item, language: language)
@@ -367,26 +364,30 @@ struct PluginGroupView: View {
         }
     }
 
-    private var labelsHeaderView: some View {
-        HStack(spacing: 3) {
-            Text("总量")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(.tertiary)
-                .frame(maxWidth: .infinity, alignment: .center)
-
+    @ViewBuilder
+    private func sectionHeaderWithLabels(title: String, items: [UsageItem]) -> some View {
+        if items.first?.labels != nil {
             HStack(spacing: 3) {
-                Text("In")
-                    .frame(width: 38, alignment: .trailing)
-                Text("Out")
-                    .frame(width: 38, alignment: .trailing)
-                Text("Cache")
-                    .frame(width: 38, alignment: .trailing)
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .frame(width: 128, alignment: .leading)
+                Color.clear
+                    .layoutPriority(1)
+                HStack(spacing: 3) {
+                    Text("In")
+                        .frame(width: 38, alignment: .trailing)
+                    Text("Out")
+                        .frame(width: 38, alignment: .trailing)
+                    Text("Cache")
+                        .frame(width: 38, alignment: .trailing)
+                }
+                .font(.system(size: 11))
+                .foregroundStyle(.primary)
             }
-            .font(.system(size: 10, weight: .medium))
-            .foregroundStyle(.tertiary)
+        } else {
+            SectionHeaderView(title: title)
         }
-        .padding(.leading, 128 + 3)
-        .padding(.trailing, 8)
     }
 
     private struct ItemSection: Identifiable {

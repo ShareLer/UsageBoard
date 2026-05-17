@@ -377,9 +377,10 @@ def build_items(data: dict[str, Any], language: str, limit_amount: float,
             cost = round(model["cost"], 2)
             items.append({
                 "id": f"today-{model['name']}",
-                "name": short_name + " " + translate(language, "today_cost"),
+                "name": translate(language, "today_cost"),
+                "subtitle": f"deepseek-{short_name}",
                 "used": cost,
-                "limit": round(today_total, 2) if today_total > 0 else 1,
+                "limit": 1,
                 "displayStyle": "value",
                 "status": "normal",
                 "color": "orange",
@@ -388,7 +389,8 @@ def build_items(data: dict[str, Any], language: str, limit_amount: float,
             rate = cache_rates.get(short_name) if cache_rates else None
             items.append({
                 "id": f"cache-{model['name']}",
-                "name": short_name + translate(language, "cache_rate"),
+                "name": translate(language, "cache_rate"),
+                "subtitle": f"deepseek-{short_name}",
                 "used": rate if rate is not None else 0,
                 "limit": 100,
                 "displayStyle": "percent2",
@@ -430,20 +432,16 @@ def build_chart(history: dict[str, Any], language: str, translate: Any) -> dict[
     }
 
 
-def build_usage_chart(records: list[dict[str, Any]], days: int = 30) -> dict[str, Any] | None:
-    """Build a token usage trend chart from platform API data.
-
-    Produces multi-segment buckets (one per model) so the Swift chart
-    renders a separate line for each model.
-    """
-    if not records:
+def build_cost_chart(cost_records: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Build a 30-day cost trend chart with total + flash + pro lines."""
+    if not cost_records:
         return None
 
     today = date_type.today()
     sorted_records = sorted(
-        (r for r in records if r["date"] <= today.isoformat()),
+        (r for r in cost_records if r["date"] <= today.isoformat()),
         key=lambda r: r["date"],
-    )[-days:]
+    )[-30:]
     if not sorted_records:
         return None
 
@@ -454,11 +452,10 @@ def build_usage_chart(records: list[dict[str, Any]], days: int = 30) -> dict[str
         segments = []
         for m in sorted(rec.get("models", []), key=lambda x: x["name"]):
             short = _short_model(m["name"])
-            if m["input"] > 0:
-                segments.append({"model": short + "-in", "tokens": m["input"]})
-            if m["output"] > 0:
-                segments.append({"model": short + "-out", "tokens": m["output"]})
-        buckets.append({
+            if short in ("pro", "flash") and m.get("cost", 0) > 0:
+                segments.append({"model": short, "tokens": round(m["cost"], 4)})
+        if segments:
+            buckets.append({
             "id": rec["date"],
             "label": label,
             "segments": segments,
@@ -563,7 +560,7 @@ def main() -> int:
                             rates[short] = round(hit / inp * 100, 1)
                     cache_rates = rates if rates else None
 
-                chart = build_usage_chart(all_amount_records, chart_days)
+                chart = build_cost_chart(all_amount_records)
         except Exception:
             pass
 
