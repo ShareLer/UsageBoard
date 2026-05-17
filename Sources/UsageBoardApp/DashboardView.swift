@@ -229,7 +229,6 @@ struct PluginGroupView: View {
     var language: AppLanguage
     var nextRefreshAt: Date?
     var onRefresh: (() -> Void)?
-    @State private var isChartExpanded = true
     private var strings: AppLocalization {
         AppLocalization(language: language)
     }
@@ -263,48 +262,20 @@ struct PluginGroupView: View {
                             .padding(.vertical, 18)
                     }
                 } else {
-                    VStack(spacing: 8) {
-                        ForEach(snapshot.items) { item in
-                            if let subtitle = item.subtitle {
-                                SectionHeaderView(title: subtitle)
-                            } else {
-                                UsageItemRow(item: item, language: language)
-                            }
-                        }
-                    }
+                    groupedItemsView
                 }
             }
             .padding(.horizontal, 12)
             .padding(.top, 10)
-            .padding(.bottom, snapshot.chart == nil ? 10 : 0)
+            .padding(.bottom, 10)
 
             if let chart = snapshot.chart {
-                VStack(spacing: 0) {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.25)) {
-                            isChartExpanded.toggle()
-                        }
-                    } label: {
-                        VStack(spacing: 0) {
-                            Divider()
-                                .padding(.top, 8)
-                            Image(systemName: isChartExpanded ? "chevron.up" : "chevron.down")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(.tertiary)
-                                .frame(maxWidth: .infinity, minHeight: 22)
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .help(isChartExpanded ? strings.text(.collapseTokenStats) : strings.text(.expandTokenStats))
-
-                    if isChartExpanded {
-                        TokenUsageChartView(chart: chart, language: language)
-                            .padding(.horizontal, 12)
-                            .padding(.top, 8)
-                            .padding(.bottom, 8)
-                    }
-                }
+                Divider()
+                    .padding(.horizontal, 12)
+                TokenUsageChartView(chart: chart, language: language)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
+                    .padding(.bottom, 8)
             }
         }
         .background(UB.Canvas.cardBackground)
@@ -333,6 +304,10 @@ struct PluginGroupView: View {
                     .padding(.vertical, 1)
                     .background(Color.red.opacity(0.10))
                     .clipShape(Capsule())
+            }
+            if let sessions = snapshot.sessions {
+                SessionIndicator(count: sessions.active, color: .green, label: language == .en ? "active" : "活跃")
+                SessionIndicator(count: sessions.today, color: .blue, label: language == .en ? "today" : "今日")
             }
             Spacer()
             stateView
@@ -363,6 +338,56 @@ struct PluginGroupView: View {
         }
     }
 
+    private var groupedItemsView: some View {
+        VStack(spacing: 8) {
+            ForEach(groupedItems.indices, id: \.self) { sectionIndex in
+                let section = groupedItems[sectionIndex]
+                if let title = section.title {
+                    SectionHeaderView(title: title)
+                }
+                ForEach(section.items) { item in
+                    UsageItemRow(item: item, language: language)
+                }
+            }
+        }
+    }
+
+    private typealias ItemGroup = (title: String?, items: [UsageItem])
+
+    private var groupedItems: [ItemGroup] {
+        var groups: [ItemGroup] = []
+        for item in snapshot.items {
+            if let last = groups.last, last.title == item.subtitle, item.subtitle != nil {
+                groups[groups.count - 1].items.append(item)
+            } else {
+                groups.append((title: item.subtitle, items: [item]))
+            }
+        }
+        return groups
+    }
+}
+
+private struct SessionIndicator: View {
+    var count: Int
+    var color: Color
+    var label: String
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Circle()
+                .fill(color)
+                .frame(width: 7, height: 7)
+            Text("\(count)个\(label)")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(color)
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(color.opacity(0.10))
+        )
+    }
 }
 
 struct UsageItemRow: View {
@@ -382,15 +407,40 @@ struct UsageItemRow: View {
                 .frame(height: 18)
                 .layoutPriority(1)
 
-            Text(item.resetText(language: language))
-                .font(.system(size: 11))
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .foregroundStyle(.tertiary)
-                .frame(width: 78, alignment: .trailing)
+            if let labels = item.labels, !labels.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(labels.indices, id: \.self) { index in
+                        Text(labels[index].text)
+                            .font(.system(size: 11))
+                            .monospacedDigit()
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                            .foregroundStyle(resolveLabelColor(labels[index].color))
+                            .frame(width: 60, alignment: .trailing)
+                    }
+                }
+            } else {
+                Text(item.resetText(language: language))
+                    .font(.system(size: 11))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 78, alignment: .trailing)
+            }
         }
         .padding(.vertical, 2)
+    }
+
+    private func resolveLabelColor(_ color: String?) -> Color {
+        switch color?.lowercased() {
+        case "blue":   return .blue
+        case "green":  return .green
+        case "orange": return .orange
+        case "red":    return .red
+        case "black":  return .primary
+        default:       return .secondary
+        }
     }
 }
 
