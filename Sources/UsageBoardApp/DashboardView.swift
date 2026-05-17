@@ -472,27 +472,30 @@ struct UsageItemRow: View {
                 .frame(height: 18)
                 .layoutPriority(1)
 
-            if let labels = item.labels, !labels.isEmpty {
-                HStack(spacing: 1) {
-                    ForEach(labels.indices, id: \.self) { index in
-                        Text(labels[index].text)
-                            .font(.system(size: 11))
-                            .monospacedDigit()
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.8)
-                            .foregroundStyle(resolveLabelColor(labels[index].color))
-                            .frame(width: 38, alignment: .trailing)
+            Group {
+                if let labels = item.labels, !labels.isEmpty {
+                    HStack(spacing: 1) {
+                        ForEach(labels.indices, id: \.self) { index in
+                            Text(labels[index].text)
+                                .font(.system(size: 11))
+                                .monospacedDigit()
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                                .foregroundStyle(resolveLabelColor(labels[index].color))
+                                .frame(width: 38, alignment: .trailing)
+                        }
                     }
+                } else {
+                    Text(item.resetText(language: language))
+                        .font(.system(size: 11))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 78, alignment: .trailing)
                 }
-            } else {
-                Text(item.resetText(language: language))
-                    .font(.system(size: 11))
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                    .foregroundStyle(.tertiary)
-                    .frame(width: 78, alignment: .trailing)
             }
+            .padding(.leading, 2)
         }
         .padding(.vertical, 2)
     }

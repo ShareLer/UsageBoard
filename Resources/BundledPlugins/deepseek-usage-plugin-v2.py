@@ -351,9 +351,27 @@ def update_history(history: dict[str, Any], current_balance: float) -> dict[str,
     }
 
 
+def compute_month_totals(cost_records: list[dict[str, Any]] | None) -> tuple[float, float, float]:
+    """Return (total_cost, flash_cost, pro_cost) for current month."""
+    if not cost_records:
+        return (0.0, 0.0, 0.0)
+    total = 0.0
+    flash = 0.0
+    pro = 0.0
+    for rec in cost_records:
+        total += rec.get("total", 0)
+        for m in rec.get("models", []):
+            short = _short_model(m["name"])
+            if short == "flash":
+                flash += m.get("cost", 0)
+            elif short == "pro":
+                pro += m.get("cost", 0)
+    return (round(total, 2), round(flash, 2), round(pro, 2))
+
+
 def build_items(data: dict[str, Any], language: str, limit_amount: float,
                 translate: Any, today_cost: dict[str, Any] | None = None,
-                cache_rates: dict[str, float] | None = None) -> list[dict[str, Any]]:
+                all_cost: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     items: list[dict] = []
     for info in data.get("balance_infos", []):
         currency = info.get("currency", "CNY")
@@ -369,35 +387,24 @@ def build_items(data: dict[str, Any], language: str, limit_amount: float,
             "color": color_for_balance(total_balance, limit_amount),
         })
 
-    # Per-model today's cost + cache rate items (pro and flash only)
+    # Per-model today/month cost (pro and flash only), under one subtitle
+    _, month_flash, month_pro = compute_month_totals(all_cost)
     if today_cost and today_cost.get("models"):
-        today_total = today_cost["total"]
         for model in today_cost["models"]:
-            short_name = _short_model(model["name"])
-            if short_name not in ("pro", "flash"):
+            short = _short_model(model["name"])
+            if short not in ("pro", "flash"):
                 continue
-            cost = round(model["cost"], 2)
+            today_val = round(model["cost"], 2)
+            month_val = month_flash if short == "flash" else month_pro
             items.append({
                 "id": f"today-{model['name']}",
-                "name": translate(language, "today_cost"),
-                "subtitle": f"deepseek-v4-{short_name}",
-                "used": cost,
-                "limit": 1,
-                "displayStyle": "value",
+                "name": translate(language, "today_month_cost"),
+                "subtitle": "dpsk-v4",
+                "used": today_val,
+                "limit": month_val if month_val > 0 else 1,
+                "displayStyle": "ratio",
                 "status": "normal",
                 "color": "orange",
-            })
-            # Cache rate row directly below
-            rate = cache_rates.get(short_name) if cache_rates else None
-            items.append({
-                "id": f"cache-{model['name']}",
-                "name": translate(language, "cache_rate"),
-                "subtitle": f"deepseek-v4-{short_name}",
-                "used": rate if rate is not None else 0,
-                "limit": 100,
-                "displayStyle": "percent2",
-                "status": "normal",
-                "color": "green" if rate is not None and rate >= 90 else "blue",
             })
 
     return items
@@ -521,7 +528,7 @@ def main() -> int:
         "balance": {"zh-Hans": "余额", "en": "Balance"},
         "consumption": {"zh-Hans": "消费", "en": "Cost"},
         "cache_rate": {"zh-Hans": "缓存率", "en": "Cache Rate"},
-        "today_cost": {"zh-Hans": "今日消费", "en": "Today's Cost"},
+        "today_month_cost": {"zh-Hans": "今日/当月", "en": "Today/Month"},
     })
     api_key = params.get("API_KEY", "")
     if not api_key:
@@ -608,7 +615,7 @@ def main() -> int:
         except Exception:
             pass
 
-        items = build_items(payload, language, limit_amount, translate, today_cost, cache_rates)
+        items = build_items(payload, language, limit_amount, translate, today_cost, all_cost)
     except Exception:
         return failure(translate(language, "usage_parse_failed"))
 

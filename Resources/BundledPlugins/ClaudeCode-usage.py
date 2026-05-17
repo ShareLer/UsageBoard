@@ -239,7 +239,7 @@ def build_items(
 
             items.append({
                 "id": f"cc-{period_id}-m{rank}",
-                "name": f" {rd['model']}",
+                "name": f" {rd['model'].replace('deepseek', 'dpsk')}",
                 "subtitle": period_label,
                 "used": total_m,
                 "limit": group_max,
