@@ -449,28 +449,30 @@ def build_cost_chart(cost_records: list[dict[str, Any]]) -> dict[str, Any] | Non
 
     today = date_type.today()
     cutoff = (today - timedelta(days=29)).isoformat()
-    sorted_records = sorted(
-        (r for r in cost_records if cutoff <= r["date"] <= today.isoformat()),
-        key=lambda r: r["date"],
-    )
-    if not sorted_records:
-        return None
 
+    # Build lookup: date -> {model: cost}
+    cost_by_day: dict[str, dict[str, float]] = {}
+    for rec in cost_records:
+        if cutoff <= rec["date"] <= today.isoformat():
+            day_data: dict[str, float] = {}
+            for m in rec.get("models", []):
+                short = _short_model(m["name"])
+                if short in ("pro", "flash") and m.get("cost", 0) > 0:
+                    day_data[short] = round(m["cost"], 4)
+            if day_data:
+                cost_by_day[rec["date"]] = day_data
+
+    # Generate fixed 30 buckets (one per day)
     buckets = []
-    for rec in sorted_records:
-        parts = rec["date"].split("-")
+    for i in range(30):
+        d = (today - timedelta(days=29 - i)).isoformat()
+        parts = d.split("-")
         label = f"{int(parts[1])}/{int(parts[2])}"
-        segments = []
-        for m in sorted(rec.get("models", []), key=lambda x: x["name"]):
-            short = _short_model(m["name"])
-            if short in ("pro", "flash") and m.get("cost", 0) > 0:
-                segments.append({"model": short, "tokens": round(m["cost"], 4)})
-        if segments:
-            buckets.append({
-            "id": rec["date"],
-            "label": label,
-            "segments": segments,
-        })
+        segments = [{"model": m, "tokens": v} for m, v in sorted(cost_by_day.get(d, {}).items())]
+        buckets.append({"id": d, "label": label, "segments": segments})
+
+    if not any(b["segments"] for b in buckets):
+        return None
 
     return {
         "kind": "line",
@@ -490,28 +492,31 @@ def build_token_chart(usage_records):
         return None
     today = date_type.today()
     cutoff = (today - timedelta(days=29)).isoformat()
-    sorted_records = sorted(
-        (r for r in usage_records if cutoff <= r["date"] <= today.isoformat()),
-        key=lambda r: r["date"],
-    )
-    if not sorted_records:
-        return None
+
+    # Build lookup: date -> {model: tokens}
+    token_by_day: dict[str, dict[str, float]] = {}
+    for rec in usage_records:
+        if cutoff <= rec["date"] <= today.isoformat():
+            day_data: dict[str, float] = {}
+            for m in rec.get("models", []):
+                short = _short_model(m["name"])
+                tokens = m.get("input", 0) + m.get("output", 0)
+                if short in ("flash", "pro") and tokens > 0:
+                    day_data[short] = round(float(tokens), 2)
+            if day_data:
+                token_by_day[rec["date"]] = day_data
+
+    # Generate fixed 30 buckets
     buckets = []
-    for rec in sorted_records:
-        parts = rec["date"].split("-")
+    for i in range(30):
+        d = (today - timedelta(days=29 - i)).isoformat()
+        parts = d.split("-")
         label = f"{int(parts[1])}/{int(parts[2])}"
-        segments = []
-        for m in sorted(rec.get("models", []), key=lambda x: x["name"]):
-            short = _short_model(m["name"])
-            tokens = m.get("input", 0) + m.get("output", 0)
-            if short in ("flash", "pro") and tokens > 0:
-                segments.append({"model": short, "tokens": round(float(tokens), 2)})
-        if segments:
-            buckets.append({
-                "id": rec["date"],
-                "label": label,
-                "segments": segments,
-            })
+        segments = [{"model": m, "tokens": v} for m, v in sorted(token_by_day.get(d, {}).items())]
+        buckets.append({"id": d, "label": label, "segments": segments})
+
+    if not any(b["segments"] for b in buckets):
+        return None
     if not buckets:
         return None
     return {
