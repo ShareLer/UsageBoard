@@ -413,7 +413,7 @@ struct UsageItemRow: View {
     var language: AppLanguage
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             Text(item.name)
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
@@ -426,7 +426,7 @@ struct UsageItemRow: View {
                 .layoutPriority(1)
 
             if let labels = item.labels, !labels.isEmpty {
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
                     ForEach(labels.indices, id: \.self) { index in
                         Text(labels[index].text)
                             .font(.system(size: 11))
@@ -434,7 +434,7 @@ struct UsageItemRow: View {
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                             .foregroundStyle(resolveLabelColor(labels[index].color))
-                            .frame(width: 44, alignment: .trailing)
+                            .frame(width: 38, alignment: .trailing)
                     }
                 }
             } else {
