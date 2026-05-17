@@ -517,13 +517,11 @@ def main() -> int:
         today_cost = None
         all_cost = None
         try:
-            def fetch_cost(m, y):
-                return _fetch_cached("cost", m, y, lambda: fetch_platform_cost(platform_token, m, y))
-            cost_records = fetch_cost(cur_month, cur_year)
+            cost_records = fetch_platform_cost(platform_token, cur_month, cur_year)
             if cost_records:
                 prev_month = cur_month - 1 if cur_month > 1 else 12
                 prev_year = cur_year if cur_month > 1 else cur_year - 1
-                prev_records = fetch_cost(prev_month, prev_year)
+                prev_records = fetch_platform_cost(platform_token, prev_month, prev_year)
                 all_cost = (prev_records or []) + (cost_records or [])
                 for rec in sorted(all_cost, key=lambda r: r["date"], reverse=True):
                     if rec["date"] <= today_str and rec.get("models") and rec.get("total", 0) > 0:
@@ -532,13 +530,10 @@ def main() -> int:
         except Exception:
             pass
 
-        # Fetch usage data with daily cache — use for both cache rates and chart
+        # Fetch usage data — use for both cache rates and chart
         cache_rates = None
         chart = None
         try:
-            def fetch_usage(m, y):
-                return _fetch_cached("usage", m, y, lambda: fetch_platform_usage(platform_token, m, y))
-
             months = [(cur_month, cur_year)]
             if cur_month > 1:
                 months.append((cur_month - 1, cur_year))
@@ -547,7 +542,7 @@ def main() -> int:
 
             all_amount_records = []
             for m, y in months:
-                records = fetch_usage(m, y)
+                records = fetch_platform_usage(platform_token, m, y)
                 if records:
                     all_amount_records.extend(records)
 

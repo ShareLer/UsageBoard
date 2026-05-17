@@ -352,7 +352,7 @@ struct PluginGroupView: View {
                     Divider()
                         .padding(.vertical, 4)
                 }
-                VStack(spacing: 8) {
+                VStack(spacing: 4) {
                     if let title = section.title {
                         sectionHeaderWithLabels(title: title, items: section.items)
                     }
