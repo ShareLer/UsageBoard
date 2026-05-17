@@ -237,26 +237,32 @@ final class UsageBoardStore: ObservableObject {
         guard let plugin = configuration.plugins.first(where: { $0.id == pluginID }) else { return }
         guard plugin.enabled else { return }
         guard isPluginReadyToRun(plugin) else {
+            let old = snapshots[plugin.id]
             snapshots[plugin.id] = makeSnapshot(
                 for: plugin,
                 state: .loading,
-                items: snapshots[plugin.id]?.items ?? [],
-                updatedAt: snapshots[plugin.id]?.updatedAt,
-                chart: snapshots[plugin.id]?.chart
+                items: old?.items ?? [],
+                updatedAt: old?.updatedAt,
+                chart: old?.chart
             )
+            snapshots[plugin.id]?.charts = old?.charts
+            snapshots[plugin.id]?.sessions = old?.sessions
             return
         }
         let refreshInterval = max(plugin.refreshIntervalSeconds, 5)
         guard force || stateStore.needsRefresh(stateID: plugin.stateID, intervalSeconds: refreshInterval) else { return }
 
+        let old = snapshots[plugin.id]
         snapshots[plugin.id] = makeSnapshot(
             for: plugin,
             state: .loading,
-            items: snapshots[plugin.id]?.items ?? [],
-            updatedAt: snapshots[plugin.id]?.updatedAt,
-            badge: snapshots[plugin.id]?.badge,
-            chart: snapshots[plugin.id]?.chart
+            items: old?.items ?? [],
+            updatedAt: old?.updatedAt,
+            badge: old?.badge,
+            chart: old?.chart
         )
+        snapshots[plugin.id]?.charts = old?.charts
+        snapshots[plugin.id]?.sessions = old?.sessions
 
         let executor = executor
         let stateStore = stateStore
