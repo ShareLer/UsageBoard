@@ -382,7 +382,7 @@ struct PluginGroupView: View {
                 Text(title)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.primary)
-                    .frame(width: 128, alignment: .leading)
+                    .frame(maxWidth: 128, alignment: .leading)
                 Text("总量")
                     .font(.system(size: 11))
                     .foregroundStyle(.primary)
@@ -466,11 +466,11 @@ struct UsageItemRow: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .frame(width: 128, alignment: .leading)
+                .frame(maxWidth: 128, alignment: .leading)
 
             UsageProgressBar(value: item.progress, label: item.displayValue(), color: item.color)
                 .frame(height: 18)
-                .layoutPriority(1)
+                .layoutPriority(2)
 
             Group {
                 if let labels = item.labels, !labels.isEmpty {
