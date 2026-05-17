@@ -216,6 +216,7 @@ def build_items(
         items.append({
             "id": f"cc-{period_id}-total",
             "name": period_label,
+            "subtitle": period_label,
             "used": total_all,
             "limit": group_max,
             "displayStyle": "value",
@@ -236,6 +237,7 @@ def build_items(
             items.append({
                 "id": f"cc-{period_id}-m{rank}",
                 "name": f" {rd['model']}",
+                "subtitle": period_label,
                 "used": total_m,
                 "limit": group_max,
                 "displayStyle": "value",
